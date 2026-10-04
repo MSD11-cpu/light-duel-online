@@ -221,4 +221,4 @@ setInterval(() => {
   }
 }, 16);
 
-server.listen(PORT, () => console.log(`Light Duel listening on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`Light Duel listening on ${PORT}`));
