@@ -12,13 +12,11 @@ const PORT = process.env.PORT || 10000;
 const N = 44;
 const rooms = new Map();
 
-function code() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let s = "";
-  do {
-    s = Array.from({length: 4}, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  } while (rooms.has(s));
-  return s;
+function send(ws, type, data = {}) {
+  if (ws.readyState === 1) ws.send(JSON.stringify({type, ...data}));
+}
+
+function other(p) { return p === 0 ? 1 : 0; }
 }
 
 function send(ws, type, data = {}) {
