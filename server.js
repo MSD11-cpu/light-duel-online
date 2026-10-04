@@ -1,222 +1,198 @@
 import http from "http";
 import { WebSocketServer } from "ws";
-import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const publicDir = path.join(__dirname, "public");
 const PORT = process.env.PORT || 10000;
 
 const N = 44;
+const START_SPEED = 95;
+const MIN_SPEED = 68;
+const MAX_SCORE = 5;
+
 const rooms = new Map();
 
 function send(ws, type, data = {}) {
-  if (ws.readyState === 1) ws.send(JSON.stringify({type, ...data}));
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type, ...data }));
+  }
 }
 
-function other(p) { return p === 0 ? 1 : 0; }
+function makeRoomCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code;
+
+  do {
+    code = Array.from(
+      { length: 4 },
+      () => chars[Math.floor(Math.random() * chars.length)]
+    ).join("");
+  } while (rooms.has(code));
+
+  return code;
 }
 
-function send(ws, type, data = {}) {
-  if (ws.readyState === 1) ws.send(JSON.stringify({type, ...data}));
+function otherPlayer(player) {
+  return player === 0 ? 1 : 0;
 }
 
-function other(p) { return p === 0 ? 1 : 0; }
+function positionKey(x, y) {
+  return `${x},${y}`;
+}
 
-function freshRound(room) {
+function directionFor(player) {
+  // Player 0 starts moving right.
+  // Player 1 starts moving left.
+  return player === 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+}
+
+function createPlayer(player) {
+  const y = player === 0 ? 14 : 29;
+  const x = player === 0 ? 10 : 33;
+
+  return {
+    x,
+    y,
+    dir: directionFor(player),
+    trail: [positionKey(x, y)],
+    turns: []
+  };
+}
+
+function createRoom() {
+  return {
+    code: makeRoomCode(),
+    players: [null, null],
+    score: [0, 0],
+
+    round: 0,
+    phase: "waiting",
+
+    count: 3,
+    countAt: 0,
+
+    lastMove: 0,
+    speed: START_SPEED,
+
+    winner: null,
+    tickTimer: null,
+    countdownTimer: null
+  };
+}
+
+function publicState(room) {
+  return {
+    code: room.code,
+    phase: room.phase,
+    round: room.round,
+    score: room.score,
+    count: room.count,
+
+    players: room.players.map((player) => {
+      if (!player) return null;
+
+      return {
+        x: player.x,
+        y: player.y,
+        dir: player.dir,
+        trail: player.trail
+      };
+    }),
+
+    winner: room.winner
+  };
+}
+
+function broadcast(room) {
+  const state = publicState(room);
+
+  for (const ws of room.players) {
+    if (ws) {
+      send(ws, "state", state);
+    }
+  }
+}
+
+function stopTimers(room) {
+  if (room.tickTimer) {
+    clearInterval(room.tickTimer);
+    room.tickTimer = null;
+  }
+
+  if (room.countdownTimer) {
+    clearInterval(room.countdownTimer);
+    room.countdownTimer = null;
+  }
+}
+
+function startCountdown(room) {
+  stopTimers(room);
+
   room.phase = "countdown";
   room.count = 3;
   room.countAt = Date.now();
-  room.acc = 0;
-  room.round++;
-  room.players = [
-    {x: 7, y: 22, dx: 1, dy: 0, q: [], trail:[[7,22]], alive:true},
-    {x: 36, y: 22, dx:-1, dy: 0, q: [], trail:[[36,22]], alive:true}
-  ];
-  broadcast(room, "round", {
-    round: room.round,
-    scores: room.scores,
-    players: room.players,
-    count: 3
-  });
-}
+  room.lastMove = 0;
+  room.speed = START_SPEED;
+  room.winner = null;
 
-function broadcast(room, type, data = {}) {
-  for (const ws of room.clients) send(ws, type, data);
-}
+  room.players[0].game = createPlayer(0);
+  room.players[1].game = createPlayer(1);
 
-function applyTurns(p) {
-  while (p.q.length) {
-    const t = p.q.shift();
-    if (t === "L") {
-      const dx = -p.dy, dy = p.dx;
-      p.dx = dx; p.dy = dy;
-    } else {
-      const dx = p.dy, dy = -p.dx;
-      p.dx = dx; p.dy = dy;
-    }
-  }
-}
+  broadcast(room);
 
-function tick(room, dt) {
-  if (room.phase !== "play") return;
-  room.acc += dt;
-  const elapsed = Math.min(1, (Date.now() - room.startAt) / 45000);
-  const stepMs = 95 - elapsed * 27;
-  if (room.acc < stepMs) return;
-  room.acc -= stepMs;
-
-  for (const p of room.players) applyTurns(p);
-
-  const next = room.players.map(p => ({x:p.x+p.dx, y:p.y+p.dy}));
-  const occ = new Set();
-  room.players.forEach(p => p.trail.forEach(([x,y]) => occ.add(y*N+x)));
-
-  const dead = [false,false];
-  next.forEach((n,i) => {
-    if (n.x < 0 || n.x >= N || n.y < 0 || n.y >= N) dead[i] = true;
-    if (occ.has(n.y*N+n.x)) dead[i] = true;
-  });
-
-  if (next[0].x === next[1].x && next[0].y === next[1].y) dead[0] = dead[1] = true;
-
-  if (dead[0] || dead[1]) {
-    for (let i=0;i<2;i++) {
-      if (!dead[i]) {
-        room.players[i].x = next[i].x;
-        room.players[i].y = next[i].y;
-        room.players[i].trail.push([room.players[i].x, room.players[i].y]);
-      }
-      room.players[i].alive = !dead[i];
-    }
-
-    let winner = -1;
-    if (dead[0] && !dead[1]) winner = 1;
-    if (dead[1] && !dead[0]) winner = 0;
-
-    if (winner >= 0) room.scores[winner]++;
-
-    room.phase = "result";
-    broadcast(room, "result", {
-      winner,
-      scores: room.scores,
-      headOn: dead[0] && dead[1],
-      players: room.players,
-      matchOver: winner >= 0 && room.scores[winner] >= 5
-    });
-    return;
-  }
-
-  room.players.forEach((p,i) => {
-    p.x = next[i].x;
-    p.y = next[i].y;
-    p.trail.push([p.x,p.y]);
-  });
-
-  broadcast(room, "state", {
-    players: room.players,
-    scores: room.scores,
-    round: room.round
-  });
-}
-
-const server = http.createServer((req,res) => {
-  let u = new URL(req.url, `http://${req.headers.host}`);
-  let file = u.pathname === "/" ? "/index.html" : u.pathname;
-  const safe = path.normalize(file).replace(/^(\.\.[\/\\])+/, "");
-  const full = path.join(publicDir, safe);
-  if (!full.startsWith(publicDir)) { res.writeHead(403); return res.end(); }
-  fs.readFile(full, (err,data) => {
-    if (err) { res.writeHead(404); return res.end("Not found"); }
-    const ext = path.extname(full);
-    const types = {".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8"};
-    res.writeHead(200, {"Content-Type":types[ext] || "application/octet-stream"});
-    res.end(data);
-  });
-});
-
-const wss = new WebSocketServer({server});
-
-wss.on("connection", ws => {
-  let room = null;
-  let player = null;
-
-  ws.on("message", raw => {
-    let m;
-    try { m = JSON.parse(raw); } catch { return; }
-
-    if (m.type === "create") {
-      if (room) return;
-      const id = code();
-      room = {id, clients:new Set([ws]), players:[null,null], sockets:[null,null], scores:[0,0], round:0, phase:"waiting", acc:0};
-      rooms.set(id, room);
-      player = 0;
-      room.sockets[0] = ws;
-      send(ws, "room", {code:id, player:0});
-      send(ws, "waiting");
+  room.countdownTimer = setInterval(() => {
+    if (room.phase !== "countdown") {
+      stopTimers(room);
       return;
     }
 
-    if (m.type === "join") {
-      if (room) return;
-      const id = String(m.code || "").toUpperCase().trim();
-      const r = rooms.get(id);
-      if (!r || r.clients.size >= 2) { send(ws,"error",{message:"Room not found or full."}); return; }
-      room = r;
-      room.clients.add(ws);
-      player = 1;
-      room.sockets[1] = ws;
-      send(ws, "room", {code:id, player:1});
-      for (const c of room.clients) send(c,"connected",{players:2});
-      freshRound(room);
+    room.count--;
+
+    if (room.count > 0) {
+      broadcast(room);
       return;
     }
 
-    if (!room || player === null) return;
+    room.phase = "playing";
+    room.lastMove = Date.now();
 
-    if (m.type === "turn" && room.phase === "play") {
-      const d = m.dir === "L" ? "L" : "R";
-      const q = room.players[player].q;
-      if (q.length < 2 && (q.length === 0 || q[q.length-1] !== d)) q.push(d);
-    }
+    broadcast(room);
 
-    if (m.type === "next" && room.phase === "result") {
-      if (room.scores[0] >= 5 || room.scores[1] >= 5) return;
-      if (room.clients.size === 2) freshRound(room);
-    }
-  });
+    clearInterval(room.countdownTimer);
+    room.countdownTimer = null;
 
-  ws.on("close", () => {
-    if (!room) return;
-    room.clients.delete(ws);
-    if (room.sockets[player] === ws) room.sockets[player] = null;
-    if (room.clients.size === 0) {
-      rooms.delete(room.id);
-    } else {
-      room.phase = "ended";
-      broadcast(room,"opponent_left");
-      rooms.delete(room.id);
-    }
-  });
-});
+    startGameLoop(room);
+  }, 1000);
+}
 
-setInterval(() => {
-  const now = Date.now();
-  for (const room of rooms.values()) {
-    if (room.phase === "countdown" && now - room.countAt >= 700) {
-      room.count--;
-      room.countAt = now;
-      if (room.count > 0) broadcast(room,"count",{count:room.count});
-      else {
-        room.phase = "play";
-        room.startAt = now;
-        broadcast(room,"go");
-      }
-    }
-    tick(room, 16);
+function startGameLoop(room) {
+  if (room.tickTimer) {
+    clearInterval(room.tickTimer);
   }
-}, 16);
 
-server.listen(PORT, '0.0.0.0', () => console.log(`Light Duel listening on ${PORT}`));
+  room.tickTimer = setInterval(() => {
+    if (room.phase !== "playing") return;
+
+    const now = Date.now();
+
+    if (now - room.lastMove < room.speed) return;
+
+    room.lastMove = now;
+    movePlayers(room);
+  }, 10);
+}
+
+function applyTurn(player, turn) {
+  const current = player.dir;
+
+  if (turn === "left") {
+    player.dir = {
+      x: current.y,
+      y: -current.x
+    };
+  } else if (turn === "right
