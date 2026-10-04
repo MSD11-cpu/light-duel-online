@@ -22,8 +22,7 @@ function code() {
 }
 
 function send(ws, type, data = {}) {
-  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({type, ...data}));
-}
+  if (ws.readyState === 1) ws.send(JSON.stringify({type, ...data}));
 
 function other(p) { return p === 0 ? 1 : 0; }
 
