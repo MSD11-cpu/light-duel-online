@@ -195,4 +195,4 @@ function applyTurn(player, turn) {
       x: current.y,
       y: -current.x
     };
-  } else if (turn === "right
+  } else if (turn === "right") {
