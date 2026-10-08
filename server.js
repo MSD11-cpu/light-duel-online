@@ -22,15 +22,20 @@ function sanitizeName(value) {
     return "";
   }
 
-  return value.trim().replace(/[^A-Za-z0-9 _'-]/g, "").slice(0, 16);
+  return value
+    .trim()
+    .replace(/[^A-Za-z0-9 _'-]/g, "")
+    .slice(0, 16);
 }
 
 function send(ws, type, data = {}) {
   if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify({
-      type,
-      ...data
-    }));
+    ws.send(
+      JSON.stringify({
+        type,
+        ...data
+      })
+    );
   }
 }
 
@@ -87,14 +92,14 @@ function makePlayer(number) {
 }
 
 /*
-  V2 absolute-direction controls.
+  Absolute-direction controls:
 
   U = Up
   D = Down
   L = Left
   R = Right
 
-  Immediate 180-degree reversal is ignored.
+  Immediate 180-degree reversals are ignored.
 */
 function turn(player, direction) {
   const opposite =
@@ -167,6 +172,7 @@ function state(room) {
         trail: ws.game.trail
       };
     }),
+
     scores: room.scores,
     playerNames: room.playerNames || ["", ""]
   };
@@ -315,16 +321,20 @@ function move(room) {
   const wall1 = outside(next1.x, next1.y);
 
   const ownTrail0 =
-    !wall0 && occupied(p0.trail, next0.x, next0.y);
+    !wall0 &&
+    occupied(p0.trail, next0.x, next0.y);
 
   const ownTrail1 =
-    !wall1 && occupied(p1.trail, next1.x, next1.y);
+    !wall1 &&
+    occupied(p1.trail, next1.x, next1.y);
 
   const enemyTrail0 =
-    !wall0 && occupied(p1.trail, next0.x, next0.y);
+    !wall0 &&
+    occupied(p1.trail, next0.x, next0.y);
 
   const enemyTrail1 =
-    !wall1 && occupied(p0.trail, next1.x, next1.y);
+    !wall1 &&
+    occupied(p0.trail, next1.x, next1.y);
 
   const headOn =
     next0.x === next1.x &&
@@ -343,7 +353,13 @@ function move(room) {
     headOn;
 
   if (dead0 || dead1) {
-    finishRound(room, dead0, dead1, headOn);
+    finishRound(
+      room,
+      dead0,
+      dead1,
+      headOn
+    );
+
     return;
   }
 
@@ -353,8 +369,15 @@ function move(room) {
   p1.x = next1.x;
   p1.y = next1.y;
 
-  p0.trail.push([p0.x, p0.y]);
-  p1.trail.push([p1.x, p1.y]);
+  p0.trail.push([
+    p0.x,
+    p0.y
+  ]);
+
+  p1.trail.push([
+    p1.x,
+    p1.y
+  ]);
 
   const longestTrail = Math.max(
     p0.trail.length,
@@ -363,13 +386,19 @@ function move(room) {
 
   room.speed = Math.max(
     MIN_SPEED,
-    START_SPEED - Math.floor(longestTrail / 60)
+    START_SPEED -
+      Math.floor(longestTrail / 60)
   );
 
   broadcast(room);
 }
 
-function finishRound(room, dead0, dead1, headOn) {
+function finishRound(
+  room,
+  dead0,
+  dead1,
+  headOn
+) {
   if (room.phase !== "playing") {
     return;
   }
@@ -413,8 +442,10 @@ function finishRound(room, dead0, dead1, headOn) {
 function handleCreate(ws, name) {
   if (ws.room) {
     send(ws, "error", {
-      message: "You are already in a room."
+      message:
+        "You are already in a room."
     });
+
     return;
   }
 
@@ -422,8 +453,10 @@ function handleCreate(ws, name) {
 
   if (!safeName) {
     send(ws, "error", {
-      message: "Please enter your name."
+      message:
+        "Please enter your name."
     });
+
     return;
   }
 
@@ -441,17 +474,24 @@ function handleCreate(ws, name) {
   send(ws, "room", {
     code: room.code,
     player: 0,
-    playerNames: room.playerNames
+    playerNames:
+      room.playerNames
   });
 
   send(ws, "waiting");
 }
 
-function handleJoin(ws, code, name) {
+function handleJoin(
+  ws,
+  code,
+  name
+) {
   if (ws.room) {
     send(ws, "error", {
-      message: "You are already in a room."
+      message:
+        "You are already in a room."
     });
+
     return;
   }
 
@@ -459,8 +499,10 @@ function handleJoin(ws, code, name) {
 
   if (!safeName) {
     send(ws, "error", {
-      message: "Please enter your name."
+      message:
+        "Please enter your name."
     });
+
     return;
   }
 
@@ -468,15 +510,22 @@ function handleJoin(ws, code, name) {
 
   if (!room) {
     send(ws, "error", {
-      message: "Room not found."
+      message:
+        "Room not found."
     });
+
     return;
   }
 
-  if (room.players[0] && room.players[1]) {
+  if (
+    room.players[0] &&
+    room.players[1]
+  ) {
     send(ws, "error", {
-      message: "Room is full."
+      message:
+        "Room is full."
     });
+
     return;
   }
 
@@ -490,13 +539,15 @@ function handleJoin(ws, code, name) {
   send(ws, "room", {
     code: room.code,
     player: 1,
-    playerNames: room.playerNames
+    playerNames:
+      room.playerNames
   });
 
   for (const player of room.players) {
     if (player) {
       send(player, "connected", {
-        playerNames: room.playerNames
+        playerNames:
+          room.playerNames
       });
     }
   }
@@ -515,7 +566,10 @@ function handleNext(ws) {
     return;
   }
 
-  if (!room.players[0] || !room.players[1]) {
+  if (
+    !room.players[0] ||
+    !room.players[1]
+  ) {
     return;
   }
 
@@ -530,248 +584,515 @@ function handleNext(ws) {
   beginRound(room);
 }
 
-function handleMessage(ws, raw) {
-  let message;
+/* =====================================================
+   WEBRTC VOICE CHAT SIGNALING
+   =====================================================
 
-  try {
-    message = JSON.parse(raw);
-  } catch {
-    send(ws, "error", {
-      message: "Invalid message."
-    });
+   The server does NOT carry the actual voice audio.
+
+   It only forwards WebRTC signaling messages:
+
+   voice-ready
+   voice-off
+   voice-offer
+   voice-answer
+   voice-ice
+
+   The actual voice connection is peer-to-peer
+   between the two players' browsers.
+===================================================== */
+
+function handleVoiceMessage(
+  ws,
+  message
+) {
+  const room = ws.room;
+
+  if (!room || ws.player === null) {
     return;
   }
 
-  if (!message || !message.type) {
+  const opponent =
+    room.players.find(
+      (player) =>
+        player &&
+        player !== ws
+    );
+
+  if (!opponent) {
     return;
   }
 
-  if (message.type === "create") {
-    handleCreate(ws, message.name);
+  /*
+    Player tells the opponent:
+    "I am ready to start voice chat."
+  */
+  if (
+    message.type ===
+    "voice-ready"
+  ) {
+    send(
+      opponent,
+      "voice-ready",
+      {
+        player: ws.player
+      }
+    );
+
     return;
   }
 
-  if (message.type === "join") {
-    const code = String(message.code || "")
-      .trim()
-      .toUpperCase();
+  /*
+    Player turned voice off.
+  */
+  if (
+    message.type ===
+    "voice-off"
+  ) {
+    send(
+      opponent,
+      "voice-off",
+      {
+        player: ws.player
+      }
+    );
 
-    if (code.length !== 4) {
-      send(ws, "error", {
-        message: "Enter the 4-character room code."
-      });
+    return;
+  }
+
+  /*
+    WebRTC offer.
+  */
+  if (
+    message.type ===
+    "voice-offer"
+  ) {
+    if (!message.offer) {
       return;
     }
 
-    handleJoin(ws, code, message.name);
+    send(
+      opponent,
+      "voice-offer",
+      {
+        player: ws.player,
+        offer: message.offer
+      }
+    );
+
     return;
   }
 
-  if (message.type === "turn") {
-    if (ws.room && ws.player !== null) {
-      queueTurn(ws, message.dir);
+  /*
+    WebRTC answer.
+  */
+  if (
+    message.type ===
+    "voice-answer"
+  ) {
+    if (!message.answer) {
+      return;
+    }
+
+    send(
+      opponent,
+      "voice-answer",
+      {
+        player: ws.player,
+        answer: message.answer
+      }
+    );
+
+    return;
+  }
+
+  /*
+    WebRTC ICE candidate.
+
+    ICE candidates help the two phones
+    discover a network path between them.
+  */
+  if (
+    message.type ===
+    "voice-ice"
+  ) {
+    if (!message.candidate) {
+      return;
+    }
+
+    send(
+      opponent,
+      "voice-ice",
+      {
+        player: ws.player,
+        candidate:
+          message.candidate
+      }
+    );
+
+    return;
+  }
+}
+
+function handleMessage(
+  ws,
+  raw
+) {
+  let message;
+
+  try {
+    message =
+      JSON.parse(raw);
+  } catch {
+    send(ws, "error", {
+      message:
+        "Invalid message."
+    });
+
+    return;
+  }
+
+  if (
+    !message ||
+    !message.type
+  ) {
+    return;
+  }
+
+  if (
+    message.type ===
+    "create"
+  ) {
+    handleCreate(
+      ws,
+      message.name
+    );
+
+    return;
+  }
+
+  if (
+    message.type ===
+    "join"
+  ) {
+    const code =
+      String(
+        message.code || ""
+      )
+        .trim()
+        .toUpperCase();
+
+    if (code.length !== 4) {
+      send(ws, "error", {
+        message:
+          "Enter the 4-character room code."
+      });
+
+      return;
+    }
+
+    handleJoin(
+      ws,
+      code,
+      message.name
+    );
+
+    return;
+  }
+
+  if (
+    message.type ===
+    "turn"
+  ) {
+    if (
+      ws.room &&
+      ws.player !== null
+    ) {
+      queueTurn(
+        ws,
+        message.dir
+      );
     }
 
     return;
   }
 
-  if (message.type === "next") {
+  if (
+    message.type ===
+    "next"
+  ) {
     handleNext(ws);
     return;
   }
 
-  /* ===== WEBRTC VOICE SIGNALING ===== */
-
+  /*
+    All voice messages are handled here.
+  */
   if (
-    message.type === "voice-ready" ||
-    message.type === "voice-off" ||
-    message.type === "voice-offer" ||
-    message.type === "voice-answer" ||
-    message.type === "voice-ice"
+    message.type ===
+      "voice-ready" ||
+    message.type ===
+      "voice-off" ||
+    message.type ===
+      "voice-offer" ||
+    message.type ===
+      "voice-answer" ||
+    message.type ===
+      "voice-ice"
   ) {
-    const room = ws.room;
-
-    if (!room || ws.player === null) {
-      return;
-    }
-
-    const opponent = room.players.find(
-      (player) => player && player !== ws
+    handleVoiceMessage(
+      ws,
+      message
     );
 
-    if (!opponent) {
-      return;
-    }
-
-    if (message.type === "voice-ready") {
-      send(opponent, "voice-ready", {
-        player: ws.player
-      });
-      return;
-    }
-
-    if (message.type === "voice-off") {
-      send(opponent, "voice-off", {
-        player: ws.player
-      });
-      return;
-    }
-
-    if (message.type === "voice-offer") {
-      send(opponent, "voice-offer", {
-        player: ws.player,
-        offer: message.offer
-      });
-      return;
-    }
-
-    if (message.type === "voice-answer") {
-      send(opponent, "voice-answer", {
-        player: ws.player,
-        answer: message.answer
-      });
-      return;
-    }
-
-    if (message.type === "voice-ice") {
-      send(opponent, "voice-ice", {
-        player: ws.player,
-        candidate: message.candidate
-      });
-    }
+    return;
   }
 }
 
-const server = http.createServer((req, res) => {
-  let requestPath = req.url || "/";
+/* =====================================================
+   HTTP SERVER
+===================================================== */
 
-  if (requestPath === "/") {
-    requestPath = "/index.html";
-  }
+const server =
+  http.createServer(
+    (req, res) => {
+      let requestPath =
+        req.url || "/";
 
-  requestPath = decodeURIComponent(
-    requestPath.split("?")[0]
+      if (
+        requestPath === "/"
+      ) {
+        requestPath =
+          "/index.html";
+      }
+
+      requestPath =
+        decodeURIComponent(
+          requestPath
+            .split("?")[0]
+        );
+
+      const cleanPath =
+        path
+          .normalize(requestPath)
+          .replace(
+            /^(\.\.[/\\])+/,
+            ""
+          );
+
+      const filePath =
+        path.join(
+          publicDir,
+          cleanPath
+        );
+
+      if (
+        !filePath.startsWith(
+          publicDir
+        )
+      ) {
+        res.writeHead(403);
+        res.end("Forbidden");
+        return;
+      }
+
+      fs.readFile(
+        filePath,
+        (error, content) => {
+          if (error) {
+            res.writeHead(404, {
+              "Content-Type":
+                "text/plain"
+            });
+
+            res.end(
+              "Not found"
+            );
+
+            return;
+          }
+
+          const extension =
+            path
+              .extname(filePath)
+              .toLowerCase();
+
+          const contentTypes = {
+            ".html":
+              "text/html; charset=utf-8",
+
+            ".css":
+              "text/css; charset=utf-8",
+
+            ".js":
+              "application/javascript; charset=utf-8",
+
+            ".json":
+              "application/json; charset=utf-8",
+
+            ".png":
+              "image/png",
+
+            ".jpg":
+              "image/jpeg",
+
+            ".jpeg":
+              "image/jpeg",
+
+            ".svg":
+              "image/svg+xml"
+          };
+
+          res.writeHead(
+            200,
+            {
+              "Content-Type":
+                contentTypes[
+                  extension
+                ] ||
+                "application/octet-stream",
+
+              "Cache-Control":
+                "no-cache"
+            }
+          );
+
+          res.end(content);
+        }
+      );
+    }
   );
 
-  const cleanPath = path
-    .normalize(requestPath)
-    .replace(/^(\.\.[/\\])+/, "");
+/* =====================================================
+   WEBSOCKET SERVER
+===================================================== */
 
-  const filePath = path.join(
-    publicDir,
-    cleanPath
-  );
-
-  if (!filePath.startsWith(publicDir)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
-  }
-
-  fs.readFile(filePath, (error, content) => {
-    if (error) {
-      res.writeHead(404, {
-        "Content-Type": "text/plain"
-      });
-
-      res.end("Not found");
-      return;
-    }
-
-    const extension = path
-      .extname(filePath)
-      .toLowerCase();
-
-    const contentTypes = {
-      ".html": "text/html; charset=utf-8",
-      ".css": "text/css; charset=utf-8",
-      ".js": "application/javascript; charset=utf-8",
-      ".json": "application/json; charset=utf-8",
-      ".png": "image/png",
-      ".jpg": "image/jpeg",
-      ".jpeg": "image/jpeg",
-      ".svg": "image/svg+xml"
-    };
-
-    res.writeHead(200, {
-      "Content-Type":
-        contentTypes[extension] ||
-        "application/octet-stream",
-      "Cache-Control": "no-cache"
-    });
-
-    res.end(content);
-  });
-});
-
-const wss = new WebSocketServer({
-  server
-});
-
-wss.on("connection", (ws) => {
-  ws.room = null;
-  ws.player = null;
-  ws.game = null;
-
-  send(ws, "connected");
-
-  ws.on("message", (message) => {
-    handleMessage(ws, message.toString());
+const wss =
+  new WebSocketServer({
+    server
   });
 
-  ws.on("close", () => {
-    const room = ws.room;
-
-    if (!room) {
-      return;
-    }
-
-    const playerNumber = ws.player;
-
-    if (
-      playerNumber !== null &&
-      room.players[playerNumber] === ws
-    ) {
-      room.players[playerNumber] = null;
-    }
-
-    stopRoom(room);
-
-    const remaining = room.players.find(
-      (player) => player
-    );
-
-    if (remaining) {
-      send(remaining, "voice-peer-left", {
-        player: playerNumber
-      });
-
-      send(remaining, "opponent_left");
-    }
-
-    if (
-      !room.players[0] &&
-      !room.players[1]
-    ) {
-      rooms.delete(room.code);
-    } else {
-      room.phase = "waiting";
-      room.round = 0;
-      room.scores = [0, 0];
-    }
-
+wss.on(
+  "connection",
+  (ws) => {
     ws.room = null;
     ws.player = null;
     ws.game = null;
-  });
 
-  ws.on("error", () => {
-    // Cleanup is handled by the close event.
-  });
-});
+    send(
+      ws,
+      "connected"
+    );
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `Light Duel listening on port ${PORT}`
-  );
-});
+    ws.on(
+      "message",
+      (message) => {
+        handleMessage(
+          ws,
+          message.toString()
+        );
+      }
+    );
+
+    ws.on(
+      "close",
+      () => {
+        const room =
+          ws.room;
+
+        if (!room) {
+          return;
+        }
+
+        const playerNumber =
+          ws.player;
+
+        if (
+          playerNumber !==
+            null &&
+          room.players[
+            playerNumber
+          ] === ws
+        ) {
+          room.players[
+            playerNumber
+          ] = null;
+        }
+
+        stopRoom(room);
+
+        const remaining =
+          room.players.find(
+            (player) =>
+              player
+          );
+
+        if (remaining) {
+          /*
+            Tell the remaining player
+            that the voice peer has left.
+          */
+          send(
+            remaining,
+            "voice-peer-left",
+            {
+              player:
+                playerNumber
+            }
+          );
+
+          send(
+            remaining,
+            "opponent_left"
+          );
+        }
+
+        if (
+          !room.players[0] &&
+          !room.players[1]
+        ) {
+          rooms.delete(
+            room.code
+          );
+        } else {
+          room.phase =
+            "waiting";
+
+          room.round = 0;
+          room.scores = [
+            0,
+            0
+          ];
+        }
+
+        ws.room = null;
+        ws.player = null;
+        ws.game = null;
+      }
+    );
+
+    ws.on(
+      "error",
+      () => {
+        /*
+          Cleanup is handled
+          by the close event.
+        */
+      }
+    );
+  }
+);
+
+/* =====================================================
+   START SERVER
+===================================================== */
+
+server.listen(
+  PORT,
+  "0.0.0.0",
+  () => {
+    console.log(
+      `Light Duel listening on port ${PORT}`
+    );
+  }
+);
