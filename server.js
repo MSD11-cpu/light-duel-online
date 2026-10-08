@@ -89,13 +89,12 @@ function makePlayer(number) {
 /*
   V2 absolute-direction controls.
 
-  A player can move:
   U = Up
   D = Down
   L = Left
   R = Right
 
-  An immediate 180-degree reversal is ignored.
+  Immediate 180-degree reversal is ignored.
 */
 function turn(player, direction) {
   const opposite =
@@ -572,12 +571,74 @@ function handleMessage(ws, raw) {
     if (ws.room && ws.player !== null) {
       queueTurn(ws, message.dir);
     }
+
     return;
   }
 
   if (message.type === "next") {
     handleNext(ws);
     return;
+  }
+
+  /* ===== WEBRTC VOICE SIGNALING ===== */
+
+  if (
+    message.type === "voice-ready" ||
+    message.type === "voice-off" ||
+    message.type === "voice-offer" ||
+    message.type === "voice-answer" ||
+    message.type === "voice-ice"
+  ) {
+    const room = ws.room;
+
+    if (!room || ws.player === null) {
+      return;
+    }
+
+    const opponent = room.players.find(
+      (player) => player && player !== ws
+    );
+
+    if (!opponent) {
+      return;
+    }
+
+    if (message.type === "voice-ready") {
+      send(opponent, "voice-ready", {
+        player: ws.player
+      });
+      return;
+    }
+
+    if (message.type === "voice-off") {
+      send(opponent, "voice-off", {
+        player: ws.player
+      });
+      return;
+    }
+
+    if (message.type === "voice-offer") {
+      send(opponent, "voice-offer", {
+        player: ws.player,
+        offer: message.offer
+      });
+      return;
+    }
+
+    if (message.type === "voice-answer") {
+      send(opponent, "voice-answer", {
+        player: ws.player,
+        answer: message.answer
+      });
+      return;
+    }
+
+    if (message.type === "voice-ice") {
+      send(opponent, "voice-ice", {
+        player: ws.player,
+        candidate: message.candidate
+      });
+    }
   }
 }
 
@@ -681,6 +742,10 @@ wss.on("connection", (ws) => {
     );
 
     if (remaining) {
+      send(remaining, "voice-peer-left", {
+        player: playerNumber
+      });
+
       send(remaining, "opponent_left");
     }
 
