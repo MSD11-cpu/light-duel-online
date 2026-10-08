@@ -86,6 +86,68 @@ function makePlayer(number) {
   };
 }
 
+/*
+  V2 absolute-direction controls.
+
+  A player can move:
+  U = Up
+  D = Down
+  L = Left
+  R = Right
+
+  An immediate 180-degree reversal is ignored.
+*/
+function turn(player, direction) {
+  const opposite =
+    (player.dx === 1 && player.dy === 0 && direction === "L") ||
+    (player.dx === -1 && player.dy === 0 && direction === "R") ||
+    (player.dx === 0 && player.dy === 1 && direction === "U") ||
+    (player.dx === 0 && player.dy === -1 && direction === "D");
+
+  if (opposite) {
+    return;
+  }
+
+  if (direction === "U") {
+    player.dx = 0;
+    player.dy = -1;
+    return;
+  }
+
+  if (direction === "D") {
+    player.dx = 0;
+    player.dy = 1;
+    return;
+  }
+
+  if (direction === "L") {
+    player.dx = -1;
+    player.dy = 0;
+    return;
+  }
+
+  if (direction === "R") {
+    player.dx = 1;
+    player.dy = 0;
+  }
+}
+
+function queueTurn(ws, direction) {
+  if (!ws || !ws.game) {
+    return;
+  }
+
+  if (!["U", "D", "L", "R"].includes(direction)) {
+    return;
+  }
+
+  if (ws.game.turns.length >= 2) {
+    return;
+  }
+
+  ws.game.turns.push(direction);
+}
+
 function stopRoom(room) {
   if (room.timer) {
     clearInterval(room.timer);
@@ -119,37 +181,6 @@ function broadcast(room) {
       send(ws, "state", data);
     }
   }
-}
-
-function turn(player, direction) {
-  const oldDx = player.dx;
-  const oldDy = player.dy;
-
-  if (direction === "L") {
-    player.dx = oldDy;
-    player.dy = -oldDx;
-  }
-
-  if (direction === "R") {
-    player.dx = -oldDy;
-    player.dy = oldDx;
-  }
-}
-
-function queueTurn(ws, direction) {
-  if (!ws || !ws.game) {
-    return;
-  }
-
-  if (direction !== "L" && direction !== "R") {
-    return;
-  }
-
-  if (ws.game.turns.length >= 2) {
-    return;
-  }
-
-  ws.game.turns.push(direction);
 }
 
 function occupied(trail, x, y) {
@@ -284,14 +315,33 @@ function move(room) {
   const wall0 = outside(next0.x, next0.y);
   const wall1 = outside(next1.x, next1.y);
 
-  const ownTrail0 = !wall0 && occupied(p0.trail, next0.x, next0.y);
-  const ownTrail1 = !wall1 && occupied(p1.trail, next1.x, next1.y);
-  const enemyTrail0 = !wall0 && occupied(p1.trail, next0.x, next0.y);
-  const enemyTrail1 = !wall1 && occupied(p0.trail, next1.x, next1.y);
-  const headOn = next0.x === next1.x && next0.y === next1.y;
+  const ownTrail0 =
+    !wall0 && occupied(p0.trail, next0.x, next0.y);
 
-  const dead0 = wall0 || ownTrail0 || enemyTrail0 || headOn;
-  const dead1 = wall1 || ownTrail1 || enemyTrail1 || headOn;
+  const ownTrail1 =
+    !wall1 && occupied(p1.trail, next1.x, next1.y);
+
+  const enemyTrail0 =
+    !wall0 && occupied(p1.trail, next0.x, next0.y);
+
+  const enemyTrail1 =
+    !wall1 && occupied(p0.trail, next1.x, next1.y);
+
+  const headOn =
+    next0.x === next1.x &&
+    next0.y === next1.y;
+
+  const dead0 =
+    wall0 ||
+    ownTrail0 ||
+    enemyTrail0 ||
+    headOn;
+
+  const dead1 =
+    wall1 ||
+    ownTrail1 ||
+    enemyTrail1 ||
+    headOn;
 
   if (dead0 || dead1) {
     finishRound(room, dead0, dead1, headOn);
@@ -307,7 +357,10 @@ function move(room) {
   p0.trail.push([p0.x, p0.y]);
   p1.trail.push([p1.x, p1.y]);
 
-  const longestTrail = Math.max(p0.trail.length, p1.trail.length);
+  const longestTrail = Math.max(
+    p0.trail.length,
+    p1.trail.length
+  );
 
   room.speed = Math.max(
     MIN_SPEED,
@@ -340,7 +393,9 @@ function finishRound(room, dead0, dead1, headOn) {
     }
   }
 
-  const matchOver = room.scores[0] >= WIN_SCORE || room.scores[1] >= WIN_SCORE;
+  const matchOver =
+    room.scores[0] >= WIN_SCORE ||
+    room.scores[1] >= WIN_SCORE;
 
   for (const ws of room.players) {
     if (ws) {
@@ -374,6 +429,7 @@ function handleCreate(ws, name) {
   }
 
   const room = createRoom();
+
   room.playerNames[0] = safeName;
   room.players[0] = ws;
 
@@ -464,7 +520,10 @@ function handleNext(ws) {
     return;
   }
 
-  if (room.scores[0] >= WIN_SCORE || room.scores[1] >= WIN_SCORE) {
+  if (
+    room.scores[0] >= WIN_SCORE ||
+    room.scores[1] >= WIN_SCORE
+  ) {
     room.scores = [0, 0];
     room.round = 0;
   }
@@ -494,7 +553,9 @@ function handleMessage(ws, raw) {
   }
 
   if (message.type === "join") {
-    const code = String(message.code || "").trim().toUpperCase();
+    const code = String(message.code || "")
+      .trim()
+      .toUpperCase();
 
     if (code.length !== 4) {
       send(ws, "error", {
@@ -527,11 +588,18 @@ const server = http.createServer((req, res) => {
     requestPath = "/index.html";
   }
 
-  requestPath = decodeURIComponent(requestPath.split("?")[0]);
+  requestPath = decodeURIComponent(
+    requestPath.split("?")[0]
+  );
 
-  const cleanPath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
+  const cleanPath = path
+    .normalize(requestPath)
+    .replace(/^(\.\.[/\\])+/, "");
 
-  const filePath = path.join(publicDir, cleanPath);
+  const filePath = path.join(
+    publicDir,
+    cleanPath
+  );
 
   if (!filePath.startsWith(publicDir)) {
     res.writeHead(403);
@@ -549,7 +617,9 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    const extension = path.extname(filePath).toLowerCase();
+    const extension = path
+      .extname(filePath)
+      .toLowerCase();
 
     const contentTypes = {
       ".html": "text/html; charset=utf-8",
@@ -563,7 +633,9 @@ const server = http.createServer((req, res) => {
     };
 
     res.writeHead(200, {
-      "Content-Type": contentTypes[extension] || "application/octet-stream",
+      "Content-Type":
+        contentTypes[extension] ||
+        "application/octet-stream",
       "Cache-Control": "no-cache"
     });
 
@@ -595,19 +667,27 @@ wss.on("connection", (ws) => {
 
     const playerNumber = ws.player;
 
-    if (playerNumber !== null && room.players[playerNumber] === ws) {
+    if (
+      playerNumber !== null &&
+      room.players[playerNumber] === ws
+    ) {
       room.players[playerNumber] = null;
     }
 
     stopRoom(room);
 
-    const remaining = room.players.find((player) => player);
+    const remaining = room.players.find(
+      (player) => player
+    );
 
     if (remaining) {
       send(remaining, "opponent_left");
     }
 
-    if (!room.players[0] && !room.players[1]) {
+    if (
+      !room.players[0] &&
+      !room.players[1]
+    ) {
       rooms.delete(room.code);
     } else {
       room.phase = "waiting";
@@ -626,5 +706,7 @@ wss.on("connection", (ws) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Light Duel listening on port ${PORT}`);
+  console.log(
+    `Light Duel listening on port ${PORT}`
+  );
 });
