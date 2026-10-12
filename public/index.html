@@ -24,11 +24,11 @@ button:disabled{opacity:.55;cursor:wait}
 .scores{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px}
 .score{flex:1;padding:12px;border-radius:14px;background:#21163d;font-weight:900;overflow-wrap:anywhere}
 .cyan{color:#2fd8ff}.orange{color:#ffa81f}
-canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px;image-rendering:p[...]
-.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;max-width:340px;margin:14px auto}
-.controls button{height:64px;font-size:27px;background:#30234f;color:white;touch-action:manipulation}
+canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px;image-rendering:pixelated}
+.controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;max-width:340px;margin:14px auto}
+.controls button{height:56px;padding:6px 2px;font-size:25px;background:#fff;color:#170f2e;touch-action:manipulation}
 .controls button:active{transform:scale(.95)}
-.controls .up{grid-column:2}.controls .left{grid-column:1;grid-row:2}.controls .down{grid-column:2;grid-row:2}.controls .right{grid-column:3;grid-row:2}
+.controls .up,.controls .left,.controls .down,.controls .right{grid-column:auto;grid-row:auto}
 .status{min-height:25px;font-weight:800;margin:8px}
 .voiceBox{background:#21163d;border-radius:15px;padding:12px;margin:12px 0}
 .voiceBtn{width:100%;background:#30234f;color:#fff}
@@ -39,6 +39,15 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 .small{font-size:13px;color:#999}
 #roomInput{text-transform:uppercase}
 .result h2{font-size:28px;margin:5px 0 15px}
+.gameTop{display:flex;justify-content:flex-end;margin-bottom:10px}
+.exitBtn{background:#30234f;color:#fff;padding:10px 16px}
+.result{border:1px solid #4a3b70}
+.result h2{overflow-wrap:anywhere}
+@media(max-width:360px){
+  h1{font-size:32px}
+  .controls{gap:6px}
+  .controls button{height:52px;font-size:22px}
+}
 </style>
 </head>
 <body>
@@ -63,6 +72,10 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 </div>
 
 <div id="game" class="hidden">
+<div class="gameTop">
+<button class="exitBtn" id="exitBtn">✕ EXIT</button>
+</div>
+
 <div class="scores">
 <div class="score cyan"><span id="p1Name">CYAN</span><br><span id="p1Score">0</span></div>
 <div class="score orange"><span id="p2Name">ORANGE</span><br><span id="p2Score">0</span></div>
@@ -111,6 +124,7 @@ const roomInput = $("roomInput");
 const createBtn = $("createBtn");
 const joinBtn = $("joinBtn");
 const copyBtn = $("copyBtn");
+const exitBtn = $("exitBtn");
 const roomCodeEl = $("roomCode");
 const roomStatus = $("roomStatus");
 const statusEl = $("status");
@@ -137,6 +151,7 @@ let playerNames = ["CYAN", "ORANGE"];
 let gameRunning = false;
 let roomConnected = false;
 let pendingOffer = null;
+let exiting = false;
 
 let localStream = null;
 let peer = null;
@@ -164,6 +179,7 @@ function connect() {
   }
 
   statusEl.textContent = "Connecting to server...";
+  exiting = false;
   ws = new WebSocket(serverURL());
 
   return new Promise((resolve, reject) => {
@@ -190,10 +206,14 @@ function connect() {
     };
 
     socket.onclose = () => {
+      if (ws === socket) ws = null;
       roomConnected = false;
       gameRunning = false;
-      statusEl.textContent = "Disconnected from server. Refresh to reconnect.";
       stopVoice(false);
+
+      if (!exiting) {
+        statusEl.textContent = "Disconnected from server. Check your connection and try again.";
+      }
     };
   });
 }
@@ -289,6 +309,7 @@ function handle(m) {
     playerNames = m.playerNames || playerNames;
     gameRunning = false;
     result.classList.add("hidden");
+    againBtn.disabled = false;
     showGame();
     updateNames();
     drawGame();
@@ -332,26 +353,31 @@ function handle(m) {
     countdown.classList.add("hidden");
     result.classList.remove("hidden");
     againBtn.disabled = false;
-    againStatus.textContent = "Both players must stay connected.";
 
     if (m.headOn || m.winner === null || m.winner === undefined) {
       resultText.textContent = "DRAW! ⚡";
     } else {
-      const winnerName = playerNames[m.winner] || (m.winner === 0 ? "CYAN" : "ORANGE");
-      resultText.textContent = winnerName.toUpperCase() + " WINS! 🎉";
+      const winnerName = playerNames[m.winner] ||
+        (m.winner === 0 ? "CYAN" : "ORANGE");
+      resultText.textContent = "🏆 " + winnerName.toUpperCase() + " WINS! 🎉";
     }
 
     if (m.matchOver) {
-      resultText.textContent += " 🏆";
-      againStatus.textContent = "Match complete! Play Again starts a new match.";
+      resultText.textContent += " 🥇";
+      againStatus.textContent = "MATCH COMPLETE! Play Again starts a new match.";
+      againBtn.textContent = "NEW MATCH";
+      statusEl.textContent = "Match complete!";
     } else {
-      againStatus.textContent = "Tap Play Again when you're ready for the next round.";
+      againStatus.textContent = "Round finished. The next round requires server support.";
+      againBtn.textContent = "PLAY AGAIN";
+      statusEl.textContent = "Round finished!";
     }
     return;
   }
 
   if (m.type === "opponent_left") {
     gameRunning = false;
+    roomConnected = false;
     statusEl.textContent = "Opponent left the game.";
     roomStatus.textContent = "Opponent disconnected. Create a new room to play again.";
     stopVoice(false);
@@ -399,7 +425,7 @@ function handle(m) {
 
   if (m.type === "voice-peer-left") {
     voiceStatus.textContent = "Opponent voice disconnected.";
-    voiceStatus.className = "voiceStatus";
+    voiceStatus.className = "voiceStatus bad";
     closePeerOnly();
   }
 }
@@ -477,7 +503,9 @@ function queueTurn(direction) {
 
 document.querySelectorAll(".controls button").forEach(button => {
   const direction = button.dataset.dir;
+
   button.addEventListener("click", () => queueTurn(direction));
+
   button.addEventListener("touchstart", event => {
     event.preventDefault();
     queueTurn(direction);
@@ -486,23 +514,17 @@ document.querySelectorAll(".controls button").forEach(button => {
 
 document.addEventListener("keydown", event => {
   if (game.classList.contains("hidden") || !gameRunning) return;
+
   if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(event.key)) {
     event.preventDefault();
   }
 
   const key = event.key.toLowerCase();
 
-  if (player === 0) {
-    if (key === "w" || event.key === "ArrowUp") queueTurn("U");
-    if (key === "s" || event.key === "ArrowDown") queueTurn("D");
-    if (key === "a" || event.key === "ArrowLeft") queueTurn("L");
-    if (key === "d" || event.key === "ArrowRight") queueTurn("R");
-  } else if (player === 1) {
-    if (key === "w" || event.key === "ArrowUp") queueTurn("U");
-    if (key === "s" || event.key === "ArrowDown") queueTurn("D");
-    if (key === "a" || event.key === "ArrowLeft") queueTurn("L");
-    if (key === "d" || event.key === "ArrowRight") queueTurn("R");
-  }
+  if (key === "w" || event.key === "ArrowUp") queueTurn("U");
+  if (key === "s" || event.key === "ArrowDown") queueTurn("D");
+  if (key === "a" || event.key === "ArrowLeft") queueTurn("L");
+  if (key === "d" || event.key === "ArrowRight") queueTurn("R");
 });
 
 copyBtn.addEventListener("click", async () => {
@@ -519,7 +541,8 @@ createBtn.addEventListener("click", createRoom);
 joinBtn.addEventListener("click", joinRoom);
 
 roomInput.addEventListener("input", () => {
-  roomInput.value = roomInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+  roomInput.value = roomInput.value.toUpperCase()
+    .replace(/[^A-Z0-9]/g, "").slice(0, 4);
 });
 
 againBtn.addEventListener("click", () => {
@@ -528,7 +551,39 @@ againBtn.addEventListener("click", () => {
     return;
   }
   againBtn.disabled = true;
-  againStatus.textContent = "Starting next round...";
+  againStatus.textContent = "Waiting for the server...";
+});
+
+exitBtn.addEventListener("click", () => {
+  if (!confirm("Are you sure you want to leave this match?")) return;
+
+  exiting = true;
+  gameRunning = false;
+  stopVoice(true);
+
+  if (ws) {
+    const socket = ws;
+    ws = null;
+    socket.close();
+  }
+
+  roomConnected = false;
+  player = null;
+  room = "";
+  players = [null, null];
+  scores = [0, 0];
+  playerNames = ["CYAN", "ORANGE"];
+
+  game.classList.add("hidden");
+  roomScreen.classList.add("hidden");
+  menu.classList.remove("hidden");
+  result.classList.add("hidden");
+  countdown.classList.add("hidden");
+
+  roomInput.value = "";
+  statusEl.textContent = "";
+  roomStatus.textContent = "Waiting for another player...";
+  updateNames();
 });
 
 async function toggleVoice() {
@@ -556,7 +611,7 @@ async function toggleVoice() {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: false
+        autoGainControl: true
       },
       video: false
     });
@@ -584,6 +639,7 @@ async function toggleVoice() {
     voiceStatus.className = "voiceStatus bad";
     voiceBtn.textContent = "🎙️ VOICE OFF";
     voiceBtn.classList.remove("on");
+
     if (localStream) localStream.getTracks().forEach(track => track.stop());
     localStream = null;
   } finally {
@@ -616,6 +672,7 @@ function createPeer() {
       remoteAudio.style.display = "none";
       document.body.appendChild(remoteAudio);
     }
+
     remoteAudio.srcObject = event.streams[0];
     remoteAudio.volume = 0.2;
     remoteAudio.play().catch(() => {
@@ -626,6 +683,7 @@ function createPeer() {
   peer.onconnectionstatechange = () => {
     if (!peer) return;
     const state = peer.connectionState;
+
     if (state === "connected") {
       voiceStatus.textContent = "🎙️ VOICE CONNECTED";
       voiceStatus.className = "voiceStatus good";
@@ -721,6 +779,7 @@ function closePeerOnly() {
   if (peer) {
     try { peer.close(); } catch {}
   }
+
   peer = null;
   remoteDescriptionSet = false;
   iceQueue = [];
