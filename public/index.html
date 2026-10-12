@@ -24,7 +24,7 @@ button:disabled{opacity:.55;cursor:wait}
 .scores{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px}
 .score{flex:1;padding:12px;border-radius:14px;background:#21163d;font-weight:900;overflow-wrap:anywhere}
 .cyan{color:#2fd8ff}.orange{color:#ffa81f}
-canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px;image-rendering:pixelated}
+canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px;image-rendering:p[...]
 .controls{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;max-width:340px;margin:14px auto}
 .controls button{height:64px;font-size:27px;background:#30234f;color:white;touch-action:manipulation}
 .controls button:active{transform:scale(.95)}
@@ -556,7 +556,7 @@ async function toggleVoice() {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true
+        autoGainControl: false
       },
       video: false
     });
