@@ -617,7 +617,7 @@ function createPeer() {
       document.body.appendChild(remoteAudio);
     }
     remoteAudio.srcObject = event.streams[0];
-    remoteAudio.volume = 0.6;
+    remoteAudio.volume = 0.2;
     remoteAudio.play().catch(() => {
       voiceStatus.textContent = "Tap the page once to allow audio playback.";
     });
