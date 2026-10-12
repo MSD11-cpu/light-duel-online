@@ -373,8 +373,17 @@ function handleJoin(ws, code, name) {
 
 function handleNext(ws) {
   const room = ws.room;
-  if (!room || room.phase !== "result") return;
-  // Kept for compatibility with older clients; rounds start automatically.
+
+  if (!room || room.phase !== "matchover") return;
+  if (!room.players[0] || !room.players[1]) return;
+  if (room.players.some(player => player.readyState !== 1)) return;
+
+  // Reset the score and start a fresh match.
+  room.scores = [0, 0];
+  room.round = 0;
+  room.speed = START_SPEED;
+
+  beginRound(room);
 }
 
 function handleVoiceMessage(ws, message) {
