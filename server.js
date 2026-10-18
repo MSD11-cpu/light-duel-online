@@ -1,4 +1,3 @@
-
 import http from "http";
 import fs from "fs";
 import path from "path";
@@ -386,33 +385,6 @@ function handleNext(ws) {
   beginRound(room);
 }
 
-function handleVoiceMessage(ws, message) {
-  const room = ws.room;
-  if (!room || ws.player === null) return;
-
-  const opponent = room.players.find(player => player && player !== ws);
-  if (!opponent) return;
-
-  const allowed = ["voice-ready", "voice-off", "voice-offer", "voice-answer", "voice-ice"];
-  if (!allowed.includes(message.type)) return;
-
-  if (
-    message.type === "voice-offer" && !message.offer ||
-    message.type === "voice-answer" && !message.answer ||
-    message.type === "voice-ice" && !message.candidate
-  ) {
-    return;
-  }
-
-  const payload = { player: ws.player };
-
-  if (message.type === "voice-offer") payload.offer = message.offer;
-  if (message.type === "voice-answer") payload.answer = message.answer;
-  if (message.type === "voice-ice") payload.candidate = message.candidate;
-
-  send(opponent, message.type, payload);
-}
-
 function handleMessage(ws, raw) {
   let message;
 
@@ -452,10 +424,6 @@ function handleMessage(ws, raw) {
   if (message.type === "next") {
     handleNext(ws);
     return;
-  }
-
-  if (message.type.startsWith("voice-")) {
-    handleVoiceMessage(ws, message);
   }
 }
 
@@ -534,7 +502,6 @@ wss.on("connection", ws => {
     const remaining = room.players.find(player => player && player !== ws);
 
     if (remaining) {
-      send(remaining, "voice-peer-left", { player: ws.player });
       send(remaining, "opponent_left");
 
       remaining.room = null;
