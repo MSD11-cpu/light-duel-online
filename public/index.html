@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,17 +23,12 @@ button:disabled{opacity:.55;cursor:wait}
 .scores{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px}
 .score{flex:1;padding:12px;border-radius:14px;background:#21163d;font-weight:900;overflow-wrap:anywhere}
 .cyan{color:#2fd8ff}.orange{color:#ffa81f}
-canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px;image-rendering:pixelated}
+canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px}
 .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;max-width:340px;margin:14px auto}
 .controls button{height:56px;padding:6px 2px;font-size:25px;background:#fff;color:#170f2e;touch-action:manipulation}
 .controls button:active{transform:scale(.95)}
 .controls .up,.controls .left,.controls .down,.controls .right{grid-column:auto;grid-row:auto}
 .status{min-height:25px;font-weight:800;margin:8px}
-.voiceBox{background:#21163d;border-radius:15px;padding:12px;margin:12px 0}
-.voiceBtn{width:100%;background:#30234f;color:#fff}
-.voiceBtn.on{background:#2fd8ff;color:#07121a}
-.voiceStatus{display:block;font-size:13px;margin-top:8px;color:#aaa}
-.voiceStatus.good{color:#5cff9d}.voiceStatus.bad{color:#ff7070}
 .countdown{font-size:64px;font-weight:900;margin:10px}
 .small{font-size:13px;color:#999}
 #roomInput{text-transform:uppercase}
@@ -82,11 +76,6 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 </div>
 
 <div id="speed" class="small">SPEED: 1x</div>
-
-<div class="voiceBox">
-<button class="voiceBtn" id="voiceBtn">🎙️ VOICE OFF</button>
-<span class="voiceStatus" id="voiceStatus">Voice ready when both players join</span>
-</div>
 
 <canvas id="board" width="44" height="44"></canvas>
 
@@ -138,8 +127,6 @@ const result = $("result");
 const resultText = $("resultText");
 const againBtn = $("againBtn");
 const againStatus = $("againStatus");
-const voiceBtn = $("voiceBtn");
-const voiceStatus = $("voiceStatus");
 
 let ws = null;
 let player = null;
@@ -150,22 +137,7 @@ let scores = [0, 0];
 let playerNames = ["CYAN", "ORANGE"];
 let gameRunning = false;
 let roomConnected = false;
-let pendingOffer = null;
 let exiting = false;
-
-let localStream = null;
-let peer = null;
-let voiceEnabled = false;
-let remoteAudio = null;
-let iceQueue = [];
-let remoteDescriptionSet = false;
-
-const rtcConfig = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" }
-  ]
-};
 
 function serverURL() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -209,7 +181,6 @@ function connect() {
       if (ws === socket) ws = null;
       roomConnected = false;
       gameRunning = false;
-      stopVoice(false);
 
       if (!exiting) {
         statusEl.textContent = "Disconnected from server. Check your connection and try again.";
@@ -380,53 +351,7 @@ function handle(m) {
     roomConnected = false;
     statusEl.textContent = "Opponent left the game.";
     roomStatus.textContent = "Opponent disconnected. Create a new room to play again.";
-    stopVoice(false);
     return;
-  }
-
-  if (m.type === "voice-ready") {
-    voiceStatus.textContent = "Opponent is ready for voice.";
-    voiceStatus.className = "voiceStatus";
-    if (voiceEnabled && player === 0) makeOffer();
-    if (voiceEnabled && player === 1 && pendingOffer) {
-      const offer = pendingOffer;
-      pendingOffer = null;
-      handleOffer(offer);
-    }
-    return;
-  }
-
-  if (m.type === "voice-off") {
-    voiceStatus.textContent = "Opponent turned voice off.";
-    voiceStatus.className = "voiceStatus";
-    closePeerOnly();
-    return;
-  }
-
-  if (m.type === "voice-offer") {
-    if (!voiceEnabled) {
-      pendingOffer = m.offer;
-      voiceStatus.textContent = "Turn your voice on to connect.";
-      return;
-    }
-    handleOffer(m.offer);
-    return;
-  }
-
-  if (m.type === "voice-answer") {
-    handleAnswer(m.answer);
-    return;
-  }
-
-  if (m.type === "voice-ice") {
-    handleIce(m.candidate);
-    return;
-  }
-
-  if (m.type === "voice-peer-left") {
-    voiceStatus.textContent = "Opponent voice disconnected.";
-    voiceStatus.className = "voiceStatus bad";
-    closePeerOnly();
   }
 }
 
@@ -559,7 +484,6 @@ exitBtn.addEventListener("click", () => {
 
   exiting = true;
   gameRunning = false;
-  stopVoice(true);
 
   if (ws) {
     const socket = ws;
@@ -585,230 +509,6 @@ exitBtn.addEventListener("click", () => {
   roomStatus.textContent = "Waiting for another player...";
   updateNames();
 });
-
-async function toggleVoice() {
-  if (voiceEnabled) {
-    stopVoice(true);
-    return;
-  }
-
-  if (!roomConnected || player === null) {
-    voiceStatus.textContent = "Join a room with another player first.";
-    voiceStatus.className = "voiceStatus bad";
-    return;
-  }
-
-  voiceBtn.disabled = true;
-  voiceStatus.textContent = "Requesting microphone permission...";
-  voiceStatus.className = "voiceStatus";
-
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error("Microphone is not supported here.");
-    }
-
-    localStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      },
-      video: false
-    });
-
-    voiceEnabled = true;
-    voiceBtn.textContent = "🎙️ VOICE ON";
-    voiceBtn.classList.add("on");
-    voiceStatus.textContent = "Microphone on. Waiting for voice connection...";
-    voiceStatus.className = "voiceStatus";
-
-    createPeer();
-    send({ type: "voice-ready" });
-
-    if (pendingOffer && player === 1) {
-      const offer = pendingOffer;
-      pendingOffer = null;
-      await handleOffer(offer);
-    }
-  } catch (error) {
-    voiceEnabled = false;
-    const message = error && error.name === "NotAllowedError"
-      ? "Microphone permission denied. Allow microphone access in your browser."
-      : "Microphone unavailable. Check your browser permissions.";
-    voiceStatus.textContent = message;
-    voiceStatus.className = "voiceStatus bad";
-    voiceBtn.textContent = "🎙️ VOICE OFF";
-    voiceBtn.classList.remove("on");
-
-    if (localStream) localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
-  } finally {
-    voiceBtn.disabled = false;
-  }
-}
-
-voiceBtn.addEventListener("click", toggleVoice);
-
-function createPeer() {
-  if (peer || !voiceEnabled) return;
-
-  peer = new RTCPeerConnection(rtcConfig);
-  remoteDescriptionSet = false;
-  iceQueue = [];
-
-  if (localStream) {
-    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-  }
-
-  peer.onicecandidate = event => {
-    if (event.candidate) send({ type: "voice-ice", candidate: event.candidate });
-  };
-
-  peer.ontrack = event => {
-    if (!remoteAudio) {
-      remoteAudio = document.createElement("audio");
-      remoteAudio.autoplay = true;
-      remoteAudio.playsInline = true;
-      remoteAudio.style.display = "none";
-      document.body.appendChild(remoteAudio);
-    }
-
-    remoteAudio.srcObject = event.streams[0];
-    remoteAudio.volume = 0.2;
-    remoteAudio.play().catch(() => {
-      voiceStatus.textContent = "Tap the page once to allow audio playback.";
-    });
-  };
-
-  peer.onconnectionstatechange = () => {
-    if (!peer) return;
-    const state = peer.connectionState;
-
-    if (state === "connected") {
-      voiceStatus.textContent = "🎙️ VOICE CONNECTED";
-      voiceStatus.className = "voiceStatus good";
-    } else if (state === "failed") {
-      voiceStatus.textContent = "Voice connection failed. Your network may block peer-to-peer audio.";
-      voiceStatus.className = "voiceStatus bad";
-    } else if (state === "connecting") {
-      voiceStatus.textContent = "Connecting voice...";
-      voiceStatus.className = "voiceStatus";
-    } else if (state === "disconnected") {
-      voiceStatus.textContent = "Voice temporarily disconnected.";
-      voiceStatus.className = "voiceStatus bad";
-    }
-  };
-}
-
-async function makeOffer() {
-  if (!voiceEnabled || player !== 0) return;
-  createPeer();
-  if (!peer) return;
-
-  try {
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    send({ type: "voice-offer", offer: peer.localDescription });
-  } catch {
-    voiceStatus.textContent = "Could not start voice. Try turning voice off and on.";
-    voiceStatus.className = "voiceStatus bad";
-  }
-}
-
-async function handleOffer(offer) {
-  if (!voiceEnabled || !offer) {
-    pendingOffer = offer;
-    return;
-  }
-
-  createPeer();
-  if (!peer) return;
-
-  try {
-    await peer.setRemoteDescription(new RTCSessionDescription(offer));
-    remoteDescriptionSet = true;
-    await flushIce();
-
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    send({ type: "voice-answer", answer: peer.localDescription });
-  } catch {
-    voiceStatus.textContent = "Voice offer failed. Try turning voice off and on.";
-    voiceStatus.className = "voiceStatus bad";
-  }
-}
-
-async function handleAnswer(answer) {
-  if (!peer || !answer) return;
-
-  try {
-    await peer.setRemoteDescription(new RTCSessionDescription(answer));
-    remoteDescriptionSet = true;
-    await flushIce();
-  } catch {
-    voiceStatus.textContent = "Voice answer failed. Try reconnecting voice.";
-    voiceStatus.className = "voiceStatus bad";
-  }
-}
-
-async function handleIce(candidate) {
-  if (!candidate) return;
-
-  if (!peer || !remoteDescriptionSet) {
-    iceQueue.push(candidate);
-    return;
-  }
-
-  try {
-    await peer.addIceCandidate(new RTCIceCandidate(candidate));
-  } catch {}
-}
-
-async function flushIce() {
-  if (!peer || !remoteDescriptionSet) return;
-
-  while (iceQueue.length) {
-    const candidate = iceQueue.shift();
-    try {
-      await peer.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch {}
-  }
-}
-
-function closePeerOnly() {
-  if (peer) {
-    try { peer.close(); } catch {}
-  }
-
-  peer = null;
-  remoteDescriptionSet = false;
-  iceQueue = [];
-
-  if (remoteAudio) {
-    remoteAudio.srcObject = null;
-    remoteAudio.remove();
-    remoteAudio = null;
-  }
-}
-
-function stopVoice(notifyOpponent) {
-  voiceEnabled = false;
-  pendingOffer = null;
-
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
-  }
-
-  closePeerOnly();
-
-  if (notifyOpponent) send({ type: "voice-off" });
-
-  voiceBtn.textContent = "🎙️ VOICE OFF";
-  voiceBtn.classList.remove("on");
-  voiceStatus.textContent = "Voice ready when both players join";
-  voiceStatus.className = "voiceStatus";
-}
 </script>
 </body>
 </html>
