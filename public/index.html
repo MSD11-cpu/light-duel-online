@@ -24,10 +24,68 @@ button:disabled{opacity:.55;cursor:wait}
 .score{flex:1;padding:12px;border-radius:14px;background:#21163d;font-weight:900;overflow-wrap:anywhere}
 .cyan{color:#2fd8ff}.orange{color:#ffa81f}
 canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px}
-.controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;max-width:340px;margin:14px auto}
-.controls button{height:56px;padding:6px 2px;font-size:25px;background:#fff;color:#170f2e;touch-action:manipulation}
-.controls button:active{transform:scale(.95)}
-.controls .up,.controls .left,.controls .down,.controls .right{grid-column:auto;grid-row:auto}
+.controls {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  grid-template-rows: repeat(2, 56px);
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 14px auto;
+  justify-content: center;
+}
+
+.controls button {
+  width: 64px;
+  height: 56px;
+  padding: 0;
+  font-size: 25px;
+  background: #fff;
+  color: #170f2e;
+  border-radius: 12px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.controls .up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.controls .left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.controls .down {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.controls .right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.controls button:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 360px) {
+  .controls {
+    grid-template-columns: repeat(3, 58px);
+    grid-template-rows: repeat(2, 52px);
+    gap: 6px;
+  }
+
+  .controls button {
+    width: 58px;
+    height: 52px;
+    font-size: 22px;
+  }
+}
+
 .status{min-height:25px;font-weight:800;margin:8px}
 .countdown{font-size:64px;font-weight:900;margin:10px}
 .small{font-size:13px;color:#999}
@@ -39,8 +97,6 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 .result h2{overflow-wrap:anywhere}
 @media(max-width:360px){
   h1{font-size:32px}
-  .controls{gap:6px}
-  .controls button{height:52px;font-size:22px}
 }
 </style>
 </head>
@@ -182,333 +238,4 @@ function connect() {
       roomConnected = false;
       gameRunning = false;
 
-      if (!exiting) {
-        statusEl.textContent = "Disconnected from server. Check your connection and try again.";
-      }
-    };
-  });
-}
-
-function send(message) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
-    return true;
-  }
-  return false;
-}
-
-async function createRoom() {
-  createBtn.disabled = true;
-  joinBtn.disabled = true;
-  myName = (nameInput.value.trim() || "Player").slice(0, 16);
-
-  try {
-    await connect();
-    send({ type: "create", name: myName });
-  } catch {
-    statusEl.textContent = "Could not connect. Check your internet and try again.";
-  } finally {
-    createBtn.disabled = false;
-    joinBtn.disabled = false;
-  }
-}
-
-async function joinRoom() {
-  room = roomInput.value.trim().toUpperCase();
-
-  if (room.length !== 4) {
-    alert("Enter a 4-character room code.");
-    return;
-  }
-
-  createBtn.disabled = true;
-  joinBtn.disabled = true;
-  myName = (nameInput.value.trim() || "Player").slice(0, 16);
-
-  try {
-    await connect();
-    send({ type: "join", code: room, name: myName });
-  } catch {
-    statusEl.textContent = "Could not connect. Check your internet and try again.";
-  } finally {
-    createBtn.disabled = false;
-    joinBtn.disabled = false;
-  }
-}
-
-function handle(m) {
-  if (m.type === "error") {
-    alert(m.message || "Something went wrong.");
-    statusEl.textContent = m.message || "Something went wrong.";
-    return;
-  }
-
-  if (m.type === "room") {
-    room = m.code;
-    player = m.player;
-    playerNames = m.playerNames || playerNames;
-    roomCodeEl.textContent = room;
-    menu.classList.add("hidden");
-    roomScreen.classList.remove("hidden");
-    roomStatus.textContent = player === 0
-      ? "Waiting for another player..."
-      : "Joined room. Connecting...";
-    updateNames();
-    return;
-  }
-
-  if (m.type === "waiting") {
-    roomStatus.textContent = "Waiting for another player...";
-    return;
-  }
-
-  if (m.type === "connected") {
-    roomConnected = true;
-    playerNames = m.playerNames || playerNames;
-    updateNames();
-
-    if (player !== null) {
-      roomStatus.textContent = "Both players connected! Get ready...";
-      showGame();
-    }
-    return;
-  }
-
-  if (m.type === "round") {
-    players = m.players || [null, null];
-    scores = m.scores || scores;
-    playerNames = m.playerNames || playerNames;
-    gameRunning = false;
-    result.classList.add("hidden");
-    againBtn.disabled = false;
-    showGame();
-    updateNames();
-    drawGame();
-    showCountdown(m.count || 3);
-    statusEl.textContent = "Get ready!";
-    return;
-  }
-
-  if (m.type === "count") {
-    showCountdown(m.count);
-    return;
-  }
-
-  if (m.type === "go") {
-    countdown.textContent = "GO!";
-    countdown.classList.remove("hidden");
-    gameRunning = true;
-    setTimeout(() => {
-      if (gameRunning) countdown.classList.add("hidden");
-    }, 600);
-    statusEl.textContent = "Ride the light. Avoid the trails!";
-    return;
-  }
-
-  if (m.type === "state") {
-    players = m.players || players;
-    scores = m.scores || scores;
-    playerNames = m.playerNames || playerNames;
-    updateNames();
-    drawGame();
-    return;
-  }
-
-  if (m.type === "result") {
-    players = m.players || players;
-    scores = m.scores || scores;
-    playerNames = m.playerNames || playerNames;
-    gameRunning = false;
-    updateNames();
-    drawGame();
-    countdown.classList.add("hidden");
-    result.classList.remove("hidden");
-    againBtn.disabled = false;
-
-    if (m.headOn || m.winner === null || m.winner === undefined) {
-      resultText.textContent = "DRAW! ⚡";
-    } else {
-      const winnerName = playerNames[m.winner] ||
-        (m.winner === 0 ? "CYAN" : "ORANGE");
-      resultText.textContent = "🏆 " + winnerName.toUpperCase() + " WINS! 🎉";
-    }
-
-    if (m.matchOver) {
-      resultText.textContent += " 🥇";
-      againStatus.textContent = "MATCH COMPLETE! Play Again starts a new match.";
-      againBtn.textContent = "NEW MATCH";
-      statusEl.textContent = "Match complete!";
-    } else {
-      againStatus.textContent = "Round finished. The next round requires server support.";
-      againBtn.textContent = "PLAY AGAIN";
-      statusEl.textContent = "Round finished!";
-    }
-    return;
-  }
-
-  if (m.type === "opponent_left") {
-    gameRunning = false;
-    roomConnected = false;
-    statusEl.textContent = "Opponent left the game.";
-    roomStatus.textContent = "Opponent disconnected. Create a new room to play again.";
-    return;
-  }
-}
-
-function showGame() {
-  roomScreen.classList.add("hidden");
-  game.classList.remove("hidden");
-  updateNames();
-}
-
-function updateNames() {
-  p1Name.textContent = (playerNames[0] || "CYAN").toUpperCase();
-  p2Name.textContent = (playerNames[1] || "ORANGE").toUpperCase();
-  p1Score.textContent = scores[0] || 0;
-  p2Score.textContent = scores[1] || 0;
-}
-
-function showCountdown(number) {
-  countdown.classList.remove("hidden");
-  countdown.textContent = number;
-  if (number > 0) gameRunning = false;
-}
-
-function drawGame() {
-  ctx.clearRect(0, 0, SIZE, SIZE);
-  ctx.fillStyle = "#0d091b";
-  ctx.fillRect(0, 0, SIZE, SIZE);
-
-  ctx.strokeStyle = "rgba(255,255,255,.06)";
-  ctx.lineWidth = 0.08;
-
-  for (let i = 0; i <= SIZE; i++) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i, SIZE);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(0, i);
-    ctx.lineTo(SIZE, i);
-    ctx.stroke();
-  }
-
-  players.forEach((p, index) => {
-    if (!p) return;
-    const color = index === 0 ? "#2fd8ff" : "#ffa81f";
-
-    ctx.fillStyle = color;
-    if (Array.isArray(p.trail)) {
-      p.trail.forEach(cell => {
-        if (Array.isArray(cell) && cell.length >= 2) {
-          ctx.fillRect(cell[0], cell[1], 1, 1);
-        }
-      });
-    }
-
-    ctx.fillStyle = "#fff";
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 6;
-    ctx.fillRect(p.x, p.y, 1, 1);
-    ctx.shadowBlur = 0;
-  });
-
-  const trailLength = players.reduce((max, p) => {
-    return Math.max(max, p && p.trail ? p.trail.length : 1);
-  }, 1);
-  const speed = Math.min(1.5, 1 + Math.floor(trailLength / 60) * 0.05);
-  speedEl.textContent = "SPEED: " + speed.toFixed(2) + "x";
-}
-
-function queueTurn(direction) {
-  if (!gameRunning || !ws || ws.readyState !== WebSocket.OPEN) return;
-  send({ type: "turn", dir: direction });
-}
-
-document.querySelectorAll(".controls button").forEach(button => {
-  const direction = button.dataset.dir;
-
-  button.addEventListener("click", () => queueTurn(direction));
-
-  button.addEventListener("touchstart", event => {
-    event.preventDefault();
-    queueTurn(direction);
-  }, { passive: false });
-});
-
-document.addEventListener("keydown", event => {
-  if (game.classList.contains("hidden") || !gameRunning) return;
-
-  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(event.key)) {
-    event.preventDefault();
-  }
-
-  const key = event.key.toLowerCase();
-
-  if (key === "w" || event.key === "ArrowUp") queueTurn("U");
-  if (key === "s" || event.key === "ArrowDown") queueTurn("D");
-  if (key === "a" || event.key === "ArrowLeft") queueTurn("L");
-  if (key === "d" || event.key === "ArrowRight") queueTurn("R");
-});
-
-copyBtn.addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(room);
-    copyBtn.textContent = "✅ COPIED!";
-    setTimeout(() => copyBtn.textContent = "📋 COPY CODE", 1500);
-  } catch {
-    prompt("Copy this room code:", room);
-  }
-});
-
-createBtn.addEventListener("click", createRoom);
-joinBtn.addEventListener("click", joinRoom);
-
-roomInput.addEventListener("input", () => {
-  roomInput.value = roomInput.value.toUpperCase()
-    .replace(/[^A-Z0-9]/g, "").slice(0, 4);
-});
-
-againBtn.addEventListener("click", () => {
-  if (!send({ type: "next" })) {
-    statusEl.textContent = "Not connected to the server.";
-    return;
-  }
-  againBtn.disabled = true;
-  againStatus.textContent = "Waiting for the server...";
-});
-
-exitBtn.addEventListener("click", () => {
-  if (!confirm("Are you sure you want to leave this match?")) return;
-
-  exiting = true;
-  gameRunning = false;
-
-  if (ws) {
-    const socket = ws;
-    ws = null;
-    socket.close();
-  }
-
-  roomConnected = false;
-  player = null;
-  room = "";
-  players = [null, null];
-  scores = [0, 0];
-  playerNames = ["CYAN", "ORANGE"];
-
-  game.classList.add("hidden");
-  roomScreen.classList.add("hidden");
-  menu.classList.remove("hidden");
-  result.classList.add("hidden");
-  countdown.classList.add("hidden");
-
-  roomInput.value = "";
-  statusEl.textContent = "";
-  roomStatus.textContent = "Waiting for another player...";
-  updateNames();
-});
-</script>
-</body>
-</html>
+The tool has finished running and created a commit. The file was updated. The commit message was: Replace controls layout in CSS in public/index.html. The commit is available at https://github.com/MSD11-cpu/light-duel-online/commit/ffb9a5d63d0a2ab7fa6a0a9c93950a8dd3b6e426. The updated file is public/index.html in the repository MSD11-cpu/light-duel-online. The raw file blob sha is 6fd5f1c226cb29f13250653f003d1e4eae9b12fa. If you want, I can open the commit or show the diff.
