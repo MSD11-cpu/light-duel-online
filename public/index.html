@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,22 +25,25 @@ button:disabled{opacity:.55;cursor:wait}
 .score{flex:1;padding:12px;border-radius:14px;background:#21163d;font-weight:900;overflow-wrap:anywhere}
 .cyan{color:#2fd8ff}.orange{color:#ffa81f}
 canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px}
-.controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;max-width:340px;margin:14px auto}
-.controls button{height:56px;padding:6px 2px;font-size:25px;background:#fff;color:#170f2e;touch-action:manipulation}
-.controls button:active{transform:scale(.95)}
-.controls .up,.controls .left,.controls .down,.controls .right{grid-column:auto;grid-row:auto}
+.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;max-width:270px;margin:14px auto}
+.controls button{height:58px;padding:6px 2px;font-size:25px;background:#fff;color:#170f2e;touch-action:none;user-select:none;-webkit-user-select:none}
+.controls button:active{transform:scale(.95);background:#2fd8ff}
+.controls .up{grid-column:2;grid-row:1}
+.controls .left{grid-column:1;grid-row:2}
+.controls .down{grid-column:2;grid-row:2}
+.controls .right{grid-column:3;grid-row:2}
 .status{min-height:25px;font-weight:800;margin:8px}
 .countdown{font-size:64px;font-weight:900;margin:10px}
 .small{font-size:13px;color:#999}
 #roomInput{text-transform:uppercase}
-.result h2{font-size:28px;margin:5px 0 15px}
+.result h2{font-size:28px;margin:5px 0 15px;overflow-wrap:anywhere}
 .gameTop{display:flex;justify-content:flex-end;margin-bottom:10px}
 .exitBtn{background:#30234f;color:#fff;padding:10px 16px}
 .result{border:1px solid #4a3b70}
-.result h2{overflow-wrap:anywhere}
+#menuStatus{min-height:22px;margin-top:12px;color:#ffbd57;font-size:13px}
 @media(max-width:360px){
   h1{font-size:32px}
-  .controls{gap:6px}
+  .controls{gap:6px;max-width:250px}
   .controls button{height:52px;font-size:22px}
 }
 </style>
@@ -56,6 +60,7 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 <br><br>
 <button class="secondary" id="joinBtn">JOIN ROOM</button>
 <div class="small">Create a room or enter a 4-character code to join.</div>
+<div id="menuStatus" role="status"></div>
 </div>
 
 <div id="roomScreen" class="room hidden">
@@ -75,8 +80,7 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 <div class="score orange"><span id="p2Name">ORANGE</span><br><span id="p2Score">0</span></div>
 </div>
 
-<div id="speed" class="small">SPEED: 1x</div>
-
+<div id="speed" class="small">SPEED: 1.00x</div>
 <canvas id="board" width="44" height="44"></canvas>
 
 <div class="controls" id="controls">
@@ -86,7 +90,7 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 <button class="right" data-dir="R" aria-label="Right">➡️</button>
 </div>
 
-<div id="status" class="status"></div>
+<div id="status" class="status" role="status"></div>
 <div id="countdown" class="countdown hidden"></div>
 
 <div id="result" class="result hidden">
@@ -106,6 +110,7 @@ const ctx = canvas.getContext("2d");
 const SIZE = 44;
 
 const menu = $("menu");
+const menuStatus = $("menuStatus");
 const roomScreen = $("roomScreen");
 const game = $("game");
 const nameInput = $("nameInput");
@@ -129,6 +134,7 @@ const againBtn = $("againBtn");
 const againStatus = $("againStatus");
 
 let ws = null;
+let connectPromise = null;
 let player = null;
 let room = "";
 let myName = "";
@@ -139,26 +145,37 @@ let gameRunning = false;
 let roomConnected = false;
 let exiting = false;
 
+function setStatus(message) {
+  statusEl.textContent = message;
+  menuStatus.textContent = menu.classList.contains("hidden") ? "" : message;
+}
+
 function serverURL() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   return protocol + "//" + location.host;
 }
 
 function connect() {
-  if (ws && (ws.readyState === WebSocket.OPEN ||
-              ws.readyState === WebSocket.CONNECTING)) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
     return Promise.resolve(ws);
   }
 
-  statusEl.textContent = "Connecting to server...";
-  exiting = false;
-  ws = new WebSocket(serverURL());
+  if (ws && ws.readyState === WebSocket.CONNECTING && connectPromise) {
+    return connectPromise;
+  }
 
-  return new Promise((resolve, reject) => {
-    const socket = ws;
+  setStatus("Connecting to server...");
+  exiting = false;
+
+  const socket = new WebSocket(serverURL());
+  ws = socket;
+
+  connectPromise = new Promise((resolve, reject) => {
+    let opened = false;
 
     socket.onopen = () => {
-      statusEl.textContent = "Connected to server";
+      opened = true;
+      setStatus("Connected to server.");
       resolve(socket);
     };
 
@@ -173,20 +190,27 @@ function connect() {
     };
 
     socket.onerror = () => {
-      statusEl.textContent = "Connection error. Refresh and try again.";
-      reject(new Error("WebSocket connection failed"));
+      setStatus("Connection error. Check your internet and try again.");
+      if (!opened) reject(new Error("WebSocket connection failed"));
     };
 
     socket.onclose = () => {
       if (ws === socket) ws = null;
+      connectPromise = null;
       roomConnected = false;
       gameRunning = false;
 
+      if (!opened) {
+        reject(new Error("Connection closed before opening"));
+      }
+
       if (!exiting) {
-        statusEl.textContent = "Disconnected from server. Check your connection and try again.";
+        setStatus("Disconnected. Check your connection and try again.");
       }
     };
   });
+
+  return connectPromise;
 }
 
 function send(message) {
@@ -198,18 +222,18 @@ function send(message) {
 }
 
 async function createRoom() {
-  createBtn.disabled = true;
-  joinBtn.disabled = true;
+  lockMenuButtons(true);
   myName = (nameInput.value.trim() || "Player").slice(0, 16);
 
   try {
     await connect();
-    send({ type: "create", name: myName });
+    if (!send({type:"create", name:myName})) {
+      throw new Error("Connection lost");
+    }
   } catch {
-    statusEl.textContent = "Could not connect. Check your internet and try again.";
+    setStatus("Could not connect. Try again in a moment.");
   } finally {
-    createBtn.disabled = false;
-    joinBtn.disabled = false;
+    lockMenuButtons(false);
   }
 }
 
@@ -221,25 +245,31 @@ async function joinRoom() {
     return;
   }
 
-  createBtn.disabled = true;
-  joinBtn.disabled = true;
+  lockMenuButtons(true);
   myName = (nameInput.value.trim() || "Player").slice(0, 16);
 
   try {
     await connect();
-    send({ type: "join", code: room, name: myName });
+    if (!send({type:"join", code:room, name:myName})) {
+      throw new Error("Connection lost");
+    }
   } catch {
-    statusEl.textContent = "Could not connect. Check your internet and try again.";
+    setStatus("Could not connect. Try again in a moment.");
   } finally {
-    createBtn.disabled = false;
-    joinBtn.disabled = false;
+    lockMenuButtons(false);
   }
+}
+
+function lockMenuButtons(locked) {
+  createBtn.disabled = locked;
+  joinBtn.disabled = locked;
 }
 
 function handle(m) {
   if (m.type === "error") {
-    alert(m.message || "Something went wrong.");
-    statusEl.textContent = m.message || "Something went wrong.";
+    const message = m.message || "Something went wrong.";
+    setStatus(message);
+    alert(message);
     return;
   }
 
@@ -281,11 +311,12 @@ function handle(m) {
     gameRunning = false;
     result.classList.add("hidden");
     againBtn.disabled = false;
+    againBtn.textContent = "PLAY AGAIN";
     showGame();
     updateNames();
     drawGame();
     showCountdown(m.count || 3);
-    statusEl.textContent = "Get ready!";
+    setStatus("Get ready!");
     return;
   }
 
@@ -298,10 +329,12 @@ function handle(m) {
     countdown.textContent = "GO!";
     countdown.classList.remove("hidden");
     gameRunning = true;
+
     setTimeout(() => {
       if (gameRunning) countdown.classList.add("hidden");
     }, 600);
-    statusEl.textContent = "Ride the light. Avoid the trails!";
+
+    setStatus("Ride the light. Avoid the trails!");
     return;
   }
 
@@ -325,3 +358,195 @@ function handle(m) {
     result.classList.remove("hidden");
     againBtn.disabled = false;
 
+    if (m.headOn || m.winner === null || m.winner === undefined) {
+      resultText.textContent = "DRAW! ⚡";
+    } else {
+      const winnerName = playerNames[m.winner] ||
+        (m.winner === 0 ? "CYAN" : "ORANGE");
+      resultText.textContent = "🏆 " + winnerName.toUpperCase() + " WINS! 🎉";
+    }
+
+    if (m.matchOver) {
+      resultText.textContent += " 🥇";
+      againStatus.textContent = "Match complete! Play Again starts a new match.";
+      againBtn.textContent = "NEW MATCH";
+      setStatus("Match complete!");
+    } else {
+      againStatus.textContent = "Round finished. Play Again to continue.";
+      againBtn.textContent = "PLAY AGAIN";
+      setStatus("Round finished!");
+    }
+    return;
+  }
+
+  if (m.type === "opponent_left") {
+    gameRunning = false;
+    roomConnected = false;
+    result.classList.remove("hidden");
+    resultText.textContent = "OPPONENT LEFT";
+    againBtn.disabled = true;
+    againStatus.textContent = "Exit and create a new room to play again.";
+    setStatus("Your opponent disconnected.");
+  }
+}
+
+function showGame() {
+  roomScreen.classList.add("hidden");
+  menu.classList.add("hidden");
+  game.classList.remove("hidden");
+  updateNames();
+}
+
+function updateNames() {
+  p1Name.textContent = (playerNames[0] || "CYAN").toUpperCase();
+  p2Name.textContent = (playerNames[1] || "ORANGE").toUpperCase();
+  p1Score.textContent = scores[0] || 0;
+  p2Score.textContent = scores[1] || 0;
+}
+
+function showCountdown(number) {
+  countdown.classList.remove("hidden");
+  countdown.textContent = number;
+  if (number > 0) gameRunning = false;
+}
+
+function drawGame() {
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.fillStyle = "#0d091b";
+  ctx.fillRect(0, 0, SIZE, SIZE);
+
+  ctx.strokeStyle = "rgba(255,255,255,.06)";
+  ctx.lineWidth = 0.08;
+
+  for (let i = 0; i <= SIZE; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, SIZE);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(SIZE, i);
+    ctx.stroke();
+  }
+
+  players.forEach((p, index) => {
+    if (!p) return;
+    const color = index === 0 ? "#2fd8ff" : "#ffa81f";
+
+    ctx.fillStyle = color;
+
+    if (Array.isArray(p.trail)) {
+      p.trail.forEach(cell => {
+        if (Array.isArray(cell) && cell.length >= 2) {
+          ctx.fillRect(cell[0], cell[1], 1, 1);
+        }
+      });
+    }
+
+    ctx.fillStyle = "#fff";
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 6;
+    ctx.fillRect(p.x, p.y, 1, 1);
+    ctx.shadowBlur = 0;
+  });
+
+  const trailLength = players.reduce((max, p) => {
+    return Math.max(max, p && p.trail ? p.trail.length : 1);
+  }, 1);
+
+  const speed = Math.min(1.5, 1 + Math.floor(trailLength / 60) * 0.05);
+  speedEl.textContent = "SPEED: " + speed.toFixed(2) + "x";
+}
+
+function queueTurn(direction) {
+  if (!gameRunning || !ws || ws.readyState !== WebSocket.OPEN) return;
+  send({type:"turn", dir:direction});
+}
+
+/* Pointer events support touch and mouse without duplicate moves. */
+document.querySelectorAll(".controls button").forEach(button => {
+  button.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    queueTurn(button.dataset.dir);
+  });
+});
+
+document.addEventListener("keydown", event => {
+  if (game.classList.contains("hidden") || !gameRunning) return;
+
+  const key = event.key.toLowerCase();
+  const keys = ["arrowup","arrowdown","arrowleft","arrowright"," "];
+
+  if (keys.includes(key)) event.preventDefault();
+
+  if (key === "w" || key === "arrowup") queueTurn("U");
+  if (key === "s" || key === "arrowdown") queueTurn("D");
+  if (key === "a" || key === "arrowleft") queueTurn("L");
+  if (key === "d" || key === "arrowright") queueTurn("R");
+});
+
+copyBtn.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(room);
+    copyBtn.textContent = "✅ COPIED!";
+    setTimeout(() => copyBtn.textContent = "📋 COPY CODE", 1500);
+  } catch {
+    prompt("Copy this room code:", room);
+  }
+});
+
+createBtn.addEventListener("click", createRoom);
+joinBtn.addEventListener("click", joinRoom);
+
+roomInput.addEventListener("input", () => {
+  roomInput.value = roomInput.value.toUpperCase()
+    .replace(/[^A-Z0-9]/g, "").slice(0, 4);
+});
+
+againBtn.addEventListener("click", () => {
+  if (!send({type:"next"})) {
+    setStatus("Not connected to the server.");
+    return;
+  }
+  againBtn.disabled = true;
+  againStatus.textContent = "Waiting for the other player...";
+});
+
+exitBtn.addEventListener("click", () => {
+  if (!confirm("Are you sure you want to leave this match?")) return;
+
+  exiting = true;
+  gameRunning = false;
+
+  if (ws) {
+    const socket = ws;
+    ws = null;
+    connectPromise = null;
+    socket.close();
+  }
+
+  roomConnected = false;
+  player = null;
+  room = "";
+  players = [null, null];
+  scores = [0, 0];
+  playerNames = ["CYAN", "ORANGE"];
+
+  game.classList.add("hidden");
+  roomScreen.classList.add("hidden");
+  menu.classList.remove("hidden");
+  result.classList.add("hidden");
+  countdown.classList.add("hidden");
+
+  roomInput.value = "";
+  statusEl.textContent = "";
+  menuStatus.textContent = "";
+  roomStatus.textContent = "Waiting for another player...";
+  updateNames();
+});
+
+drawGame();
+</script>
+</body>
+</html>
