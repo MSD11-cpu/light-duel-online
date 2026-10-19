@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,7 +15,7 @@ input{width:100%;margin-bottom:10px;background:#fff;color:#111}
 button{cursor:pointer;font-weight:800}
 button:disabled{opacity:.55;cursor:wait}
 .primary{background:#2fd8ff;color:#07121a;width:100%}
-.secondary{background:#30234f;color:#fff}
+.secondary{background:#30234f;color:#fff'}
 .hidden{display:none!important}
 .room,.result{background:#21163d;border-radius:18px;padding:20px;margin-top:15px}
 .roomCode{font-size:32px;font-weight:900;letter-spacing:5px;margin:12px 0}
@@ -45,6 +44,44 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
   h1{font-size:32px}
   .controls{gap:6px;max-width:250px}
   .controls button{height:52px;font-size:22px}
+}
+
+/* Celebration overlay styles */
+#celebration{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:40;pointer-events:none}
+#celebration .inner{width:100%;max-width:820px;padding:24px;text-align:center}
+.victory{font-weight:900;font-size:48px;letter-spacing:2px;margin-bottom:6px;color:#fff;text-transform:uppercase}
+.victory.neon-cyan{color:#2fd8ff;text-shadow:0 0 8px rgba(47,216,255,.85),0 0 18px rgba(47,216,255,.55),0 0 36px rgba(47,216,255,.3)}
+.victory.neon-orange{color:#ffa81f;text-shadow:0 0 8px rgba(255,168,31,.85),0 0 18px rgba(255,168,31,.55),0 0 36px rgba(255,168,31,.3)}
+.victor-name{font-weight:900;font-size:36px;margin:6px 0;display:inline-block}
+.victor-name .letter{display:inline-block;opacity:0;transform:translateY(8px) rotate(-6deg);font-size:1em;margin:0 1px}
+.victor-name .neon-cyan{color:#2fd8ff;text-shadow:0 0 6px rgba(47,216,255,.9),0 0 14px rgba(47,216,255,.6),0 0 28px rgba(47,216,255,.25)}
+.victor-name .neon-orange{color:#ffa81f;text-shadow:0 0 6px rgba(255,168,31,.9),0 0 14px rgba(255,168,31,.6),0 0 28px rgba(255,168,31,.25)}
+@keyframes letterIn{0%{opacity:0;transform:translateY(8px) rotate(-6deg);filter:blur(2px)}50%{opacity:1;transform:translateY(-4px) rotate(2deg)}100%{opacity:1;transform:translateY(0) rotate(0);filter:blur(0)}}
+
+/* emoji burst */
+.emoji-burst{font-size:34px;margin-top:10px;display:flex;gap:10px;justify-content:center;align-items:center}
+.emoji-burst .emoji{opacity:0;transform:scale(.6) translateY(6px);display:inline-block}
+@keyframes emojiPop{0%{opacity:0;transform:scale(.6) translateY(8px)}60%{opacity:1;transform:scale(1.18) translateY(-6px)}100%{transform:scale(1) translateY(0);opacity:1}}
+
+/* champion text */
+.champion{font-size:20px;margin-top:10px;font-weight:900;opacity:0;transform:translateY(6px)}
+@keyframes championIn{0%{opacity:0;transform:translateY(8px) scale(.98)}100%{opacity:1;transform:translateY(0) scale(1)}}
+
+/* confetti */
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:39;overflow:hidden}
+.confetti-piece{position:absolute;width:10px;height:14px;opacity:0.95;border-radius:2px;transform-origin:center;will-change:transform,opacity}
+@keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(520deg);opacity:1}}
+
+/* Ensure result buttons stay clickable */
+#result{position:relative;z-index:45}
+#celebration, #confetti{display:none}
+#celebration.show{display:flex}
+#confetti.show{display:block}
+
+@media(max-width:480px){
+  .victory{font-size:34px}
+  .victor-name{font-size:28px}
+  .emoji-burst{font-size:28px}
 }
 </style>
 </head>
@@ -91,7 +128,7 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 </div>
 
 <div id="status" class="status" role="status"></div>
-<div id="countdown" class="countdown hidden"></div>
+<div id="countdown" class="countdown hidden></div>
 
 <div id="result" class="result hidden">
 <h2 id="resultText"></h2>
@@ -100,6 +137,22 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 </div>
 </div>
 </div>
+
+<!-- Celebration overlay (only shown on match win) -->
+<div id="celebration" aria-hidden="true">
+  <div class="inner">
+    <div id="victoryText" class="victory">VICTORY! 🏆</div>
+    <div id="victorName" class="victor-name" aria-live="polite"></div>
+    <div id="emojiBurst" class="emoji-burst hidden">
+      <span class="emoji">🥂🍾</span>
+      <span class="emoji">🎉</span>
+      <span class="emoji">🎊</span>
+      <span class="emoji">✨</span>
+    </div>
+    <div id="championText" class="champion hidden">CHAMPION! 🏆🥂</div>
+  </div>
+</div>
+<div id="confetti"></div>
 
 <script>
 "use strict";
@@ -132,6 +185,14 @@ const result = $("result");
 const resultText = $("resultText");
 const againBtn = $("againBtn");
 const againStatus = $("againStatus");
+
+// Celebration elements
+const celebration = $("celebration");
+const victoryText = $("victoryText");
+const victorName = $("victorName");
+const emojiBurst = $("emojiBurst");
+const championText = $("championText");
+const confettiRoot = $("confetti");
 
 let ws = null;
 let connectPromise = null;
@@ -317,6 +378,8 @@ function handle(m) {
     drawGame();
     showCountdown(m.count || 3);
     setStatus("Get ready!");
+    // Hide celebration at the start of a new round
+    hideCelebration();
     return;
   }
 
@@ -371,6 +434,11 @@ function handle(m) {
       againStatus.textContent = "Match complete! Play Again starts a new match.";
       againBtn.textContent = "NEW MATCH";
       setStatus("Match complete!");
+      // Trigger celebration for match win
+      if (m.winner === 0 || m.winner === 1) {
+        const winnerName = (playerNames[m.winner] || (m.winner === 0 ? "CYAN" : "ORANGE")).toUpperCase();
+        showCelebration(m.winner, winnerName);
+      }
     } else {
       againStatus.textContent = "Round finished. Play Again to continue.";
       againBtn.textContent = "PLAY AGAIN";
@@ -387,6 +455,7 @@ function handle(m) {
     againBtn.disabled = true;
     againStatus.textContent = "Exit and create a new room to play again.";
     setStatus("Your opponent disconnected.");
+    hideCelebration();
   }
 }
 
@@ -544,8 +613,119 @@ exitBtn.addEventListener("click", () => {
   menuStatus.textContent = "";
   roomStatus.textContent = "Waiting for another player...";
   updateNames();
+  hideCelebration();
 });
 
+// Celebration logic
+function clearChildren(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+
+function hideCelebration(){
+  celebration.classList.remove('show');
+  celebration.setAttribute('aria-hidden','true');
+  victoryText.classList.remove('neon-cyan','neon-orange');
+  victorName.textContent = '';
+  emojiBurst.classList.add('hidden');
+  championText.classList.add('hidden');
+  confettiRoot.classList.remove('show');
+  // remove confetti pieces
+  clearChildren(confettiRoot);
+}
+
+function createConfettiPieces(count, colorSet){
+  const pieces = [];
+  const w = window.innerWidth;
+  for(let i=0;i<count;i++){
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    const left = Math.random()*100; // vw percentage
+    el.style.left = left + 'vw';
+    el.style.top = (-Math.random()*20) + 'vh';
+    el.style.background = colorSet[Math.floor(Math.random()*colorSet.length)];
+    const delay = Math.random()*0.6;
+    const duration = 2 + Math.random()*2.5;
+    el.style.animation = `confettiFall ${duration}s linear ${delay}s forwards`;
+    el.style.transform = `rotate(${Math.random()*360}deg)`;
+    confettiRoot.appendChild(el);
+    pieces.push(el);
+  }
+  return pieces;
+}
+
+async function showCelebration(winnerIndex, winnerName){
+  hideCelebration();
+  // choose color class
+  const isCyan = winnerIndex === 0;
+  victoryText.classList.add(isCyan? 'neon-cyan':'neon-orange');
+  celebration.classList.add('show');
+  celebration.setAttribute('aria-hidden','false');
+
+  // prepare name container and animate letters
+  clearChildren(victorName);
+  const name = winnerName || (isCyan? 'CYAN':'ORANGE');
+  // set responsive font size slightly larger on long names
+  // create spans per letter
+  const letters = Array.from(name);
+  letters.forEach((ch, i) => {
+    const span = document.createElement('span');
+    span.className = 'letter ' + (isCyan? 'neon-cyan':'neon-orange');
+    span.textContent = ch;
+    // schedule animation via setTimeout
+    setTimeout(()=>{
+      span.style.animation = 'letterIn 420ms cubic-bezier(.2,.9,.3,1) forwards';
+      // add subtle trail using text shadow transition (kept by CSS)
+    }, i * 200); // ~0.2s per letter
+    victorName.appendChild(span);
+  });
+
+  // show confetti and emojis after name animation completes
+  const totalNameTime = letters.length * 200 + 500;
+
+  setTimeout(()=>{
+    // show emoji burst with staggered pop
+    emojiBurst.classList.remove('hidden');
+    Array.from(emojiBurst.children).forEach((el,i)=>{
+      el.style.animation = `emojiPop 650ms cubic-bezier(.2,.8,.2,1) ${i*120}ms both`;
+    });
+
+    // champion text
+    championText.classList.remove('hidden');
+    championText.style.animation = 'championIn 560ms cubic-bezier(.2,.9,.2,1) 300ms both';
+
+    // add confetti
+    confettiRoot.classList.add('show');
+    const colors = isCyan ? ['#2fd8ff','#9eeeff','#4ac6ff','#fff'] : ['#ffa81f','#ffd58b','#ffc36b','#fff'];
+    createConfettiPieces(28, colors);
+
+    // subtle pulse on victory title
+    victoryText.animate([
+      {transform: 'scale(1)', filter:'brightness(1)'},
+      {transform: 'scale(1.04)', filter:'brightness(1.12)'},
+      {transform: 'scale(1)', filter:'brightness(1)'}
+    ], {duration: 1400, iterations: 2});
+
+    // auto-hide celebration after some time (but keep result visible)
+    setTimeout(()=>{
+      // fade confetti pieces out
+      // keep overlay visible for a bit then allow it to be hidden by next round or exit
+      // leave celebration shown for user until next round
+    }, 3500);
+
+  }, totalNameTime);
+}
+
+// Utility to ensure celebration is hidden initially
+hideCelebration();
+
+// End celebration logic
+
+// rest of game code continues...
+
+function queueTurn(direction) {
+  if (!gameRunning || !ws || ws.readyState !== WebSocket.OPEN) return;
+  send({type:"turn", dir:direction});
+}
+
+// draw initial board
 drawGame();
 </script>
 </body>
