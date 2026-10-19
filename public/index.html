@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Light Duel</title>
+
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#170f2e;color:#fff;font-family:Arial,sans-serif;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:16px}
@@ -15,14 +16,15 @@ input{width:100%;margin-bottom:10px;background:#fff;color:#111}
 button{cursor:pointer;font-weight:800}
 button:disabled{opacity:.55;cursor:wait}
 .primary{background:#2fd8ff;color:#07121a;width:100%}
-.secondary{background:#30234f;color:#fff'}
+.secondary{background:#30234f;color:#fff}
 .hidden{display:none!important}
 .room,.result{background:#21163d;border-radius:18px;padding:20px;margin-top:15px}
 .roomCode{font-size:32px;font-weight:900;letter-spacing:5px;margin:12px 0}
 .copy{background:#ffa81f;color:#17100a;width:100%}
 .scores{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px}
 .score{flex:1;padding:12px;border-radius:14px;background:#21163d;font-weight:900;overflow-wrap:anywhere}
-.cyan{color:#2fd8ff}.orange{color:#ffa81f}
+.cyan{color:#2fd8ff}
+.orange{color:#ffa81f}
 canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440px;max-height:440px;margin:10px auto;background:#0d091b;border:3px solid #4a3b70;border-radius:12px}
 .controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;max-width:270px;margin:14px auto}
 .controls button{height:58px;padding:6px 2px;font-size:25px;background:#fff;color:#170f2e;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -40,118 +42,151 @@ canvas{display:block;width:min(92vw,440px);height:min(92vw,440px);max-width:440p
 .exitBtn{background:#30234f;color:#fff;padding:10px 16px}
 .result{border:1px solid #4a3b70}
 #menuStatus{min-height:22px;margin-top:12px;color:#ffbd57;font-size:13px}
+
 @media(max-width:360px){
   h1{font-size:32px}
   .controls{gap:6px;max-width:250px}
   .controls button{height:52px;font-size:22px}
 }
 
-/* Celebration overlay styles */
-#celebration{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:40;pointer-events:none}
+/* Victory celebration */
+#celebration{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:40;
+  pointer-events:none;
+  background:rgba(9,5,22,.88);
+  overflow:hidden;
+}
+#celebration.show{display:flex}
 #celebration .inner{width:100%;max-width:820px;padding:24px;text-align:center}
 .victory{font-weight:900;font-size:48px;letter-spacing:2px;margin-bottom:6px;color:#fff;text-transform:uppercase}
 .victory.neon-cyan{color:#2fd8ff;text-shadow:0 0 8px rgba(47,216,255,.85),0 0 18px rgba(47,216,255,.55),0 0 36px rgba(47,216,255,.3)}
 .victory.neon-orange{color:#ffa81f;text-shadow:0 0 8px rgba(255,168,31,.85),0 0 18px rgba(255,168,31,.55),0 0 36px rgba(255,168,31,.3)}
-.victor-name{font-weight:900;font-size:36px;margin:6px 0;display:inline-block}
+.victor-name{font-weight:900;font-size:36px;margin:6px 0;display:inline-block;overflow-wrap:anywhere}
 .victor-name .letter{display:inline-block;opacity:0;transform:translateY(8px) rotate(-6deg);font-size:1em;margin:0 1px}
 .victor-name .neon-cyan{color:#2fd8ff;text-shadow:0 0 6px rgba(47,216,255,.9),0 0 14px rgba(47,216,255,.6),0 0 28px rgba(47,216,255,.25)}
 .victor-name .neon-orange{color:#ffa81f;text-shadow:0 0 6px rgba(255,168,31,.9),0 0 14px rgba(255,168,31,.6),0 0 28px rgba(255,168,31,.25)}
-@keyframes letterIn{0%{opacity:0;transform:translateY(8px) rotate(-6deg);filter:blur(2px)}50%{opacity:1;transform:translateY(-4px) rotate(2deg)}100%{opacity:1;transform:translateY(0) rotate(0);filter:blur(0)}}
 
-/* emoji burst */
+@keyframes letterIn{
+  0%{opacity:0;transform:translateY(8px) rotate(-6deg);filter:blur(2px)}
+  50%{opacity:1;transform:translateY(-4px) rotate(2deg)}
+  100%{opacity:1;transform:translateY(0) rotate(0);filter:blur(0)}
+}
+
 .emoji-burst{font-size:34px;margin-top:10px;display:flex;gap:10px;justify-content:center;align-items:center}
 .emoji-burst .emoji{opacity:0;transform:scale(.6) translateY(6px);display:inline-block}
-@keyframes emojiPop{0%{opacity:0;transform:scale(.6) translateY(8px)}60%{opacity:1;transform:scale(1.18) translateY(-6px)}100%{transform:scale(1) translateY(0);opacity:1}}
 
-/* champion text */
+@keyframes emojiPop{
+  0%{opacity:0;transform:scale(.6) translateY(8px)}
+  60%{opacity:1;transform:scale(1.18) translateY(-6px)}
+  100%{transform:scale(1) translateY(0);opacity:1}
+}
+
 .champion{font-size:20px;margin-top:10px;font-weight:900;opacity:0;transform:translateY(6px)}
-@keyframes championIn{0%{opacity:0;transform:translateY(8px) scale(.98)}100%{opacity:1;transform:translateY(0) scale(1)}}
 
-/* confetti */
-#confetti{position:fixed;inset:0;pointer-events:none;z-index:39;overflow:hidden}
-.confetti-piece{position:absolute;width:10px;height:14px;opacity:0.95;border-radius:2px;transform-origin:center;will-change:transform,opacity}
-@keyframes confettiFall{0%{transform:translateY(-10vh) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(520deg);opacity:1}}
+@keyframes championIn{
+  0%{opacity:0;transform:translateY(8px) scale(.98)}
+  100%{opacity:1;transform:translateY(0) scale(1)}
+}
 
-/* Ensure result buttons stay clickable */
-#result{position:relative;z-index:45}
-#celebration, #confetti{display:none}
-#celebration.show{display:flex}
+#confetti{position:fixed;inset:0;display:none;pointer-events:none;z-index:39;overflow:hidden}
 #confetti.show{display:block}
+.confetti-piece{position:absolute;width:10px;height:14px;opacity:.95;border-radius:2px;transform-origin:center;will-change:transform,opacity}
+
+@keyframes confettiFall{
+  0%{transform:translateY(-10vh) rotate(0deg);opacity:1}
+  100%{transform:translateY(110vh) rotate(520deg);opacity:0}
+}
+
+/* Keep result buttons clickable */
+#result{position:relative;z-index:45}
 
 @media(max-width:480px){
   .victory{font-size:34px}
   .victor-name{font-size:28px}
   .emoji-burst{font-size:28px}
 }
+
+@media(prefers-reduced-motion:reduce){
+  .confetti-piece{animation:none!important}
+}
 </style>
 </head>
+
 <body>
 <div id="app">
-<h1>⚡ LIGHT DUEL</h1>
+  <h1>⚡ LIGHT DUEL</h1>
 
-<div id="menu">
-<p>Real-time multiplayer light battle</p>
-<input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="nickname">
-<input id="roomInput" maxlength="4" placeholder="Room code (join)">
-<button class="primary" id="createBtn">CREATE ROOM</button>
-<br><br>
-<button class="secondary" id="joinBtn">JOIN ROOM</button>
-<div class="small">Create a room or enter a 4-character code to join.</div>
-<div id="menuStatus" role="status"></div>
+  <div id="menu">
+    <p>Real-time multiplayer light battle</p>
+    <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="nickname">
+    <input id="roomInput" maxlength="4" placeholder="Room code (join)">
+    <button class="primary" id="createBtn" type="button">CREATE ROOM</button>
+    <br><br>
+    <button class="secondary" id="joinBtn" type="button">JOIN ROOM</button>
+    <div class="small">Create a room or enter a 4-character code to join.</div>
+    <div id="menuStatus" role="status"></div>
+  </div>
+
+  <div id="roomScreen" class="room hidden">
+    <div>Your Room</div>
+    <div class="roomCode" id="roomCode">----</div>
+    <button class="copy" id="copyBtn" type="button">📋 COPY CODE</button>
+    <p id="roomStatus">Waiting for another player...</p>
+  </div>
+
+  <div id="game" class="hidden">
+    <div class="gameTop">
+      <button class="exitBtn" id="exitBtn" type="button">✕ EXIT</button>
+    </div>
+
+    <div class="scores">
+      <div class="score cyan"><span id="p1Name">CYAN</span><br><span id="p1Score">0</span></div>
+      <div class="score orange"><span id="p2Name">ORANGE</span><br><span id="p2Score">0</span></div>
+    </div>
+
+    <div id="speed" class="small">SPEED: 1.00x</div>
+    <canvas id="board" width="44" height="44"></canvas>
+
+    <div class="controls" id="controls">
+      <button class="up" data-dir="U" aria-label="Up" type="button">⬆️</button>
+      <button class="left" data-dir="L" aria-label="Left" type="button">⬅️</button>
+      <button class="down" data-dir="D" aria-label="Down" type="button">⬇️</button>
+      <button class="right" data-dir="R" aria-label="Right" type="button">➡️</button>
+    </div>
+
+    <div id="status" class="status" role="status"></div>
+    <div id="countdown" class="countdown hidden"></div>
+
+    <div id="result" class="result hidden">
+      <h2 id="resultText"></h2>
+      <button class="primary" id="againBtn" type="button">PLAY AGAIN</button>
+      <p class="small" id="againStatus">Both players must stay connected.</p>
+    </div>
+  </div>
 </div>
 
-<div id="roomScreen" class="room hidden">
-<div>Your Room</div>
-<div class="roomCode" id="roomCode">----</div>
-<button class="copy" id="copyBtn">📋 COPY CODE</button>
-<p id="roomStatus">Waiting for another player...</p>
-</div>
-
-<div id="game" class="hidden">
-<div class="gameTop">
-<button class="exitBtn" id="exitBtn">✕ EXIT</button>
-</div>
-
-<div class="scores">
-<div class="score cyan"><span id="p1Name">CYAN</span><br><span id="p1Score">0</span></div>
-<div class="score orange"><span id="p2Name">ORANGE</span><br><span id="p2Score">0</span></div>
-</div>
-
-<div id="speed" class="small">SPEED: 1.00x</div>
-<canvas id="board" width="44" height="44"></canvas>
-
-<div class="controls" id="controls">
-<button class="up" data-dir="U" aria-label="Up">⬆️</button>
-<button class="left" data-dir="L" aria-label="Left">⬅️</button>
-<button class="down" data-dir="D" aria-label="Down">⬇️</button>
-<button class="right" data-dir="R" aria-label="Right">➡️</button>
-</div>
-
-<div id="status" class="status" role="status"></div>
-<div id="countdown" class="countdown hidden></div>
-
-<div id="result" class="result hidden">
-<h2 id="resultText"></h2>
-<button class="primary" id="againBtn">PLAY AGAIN</button>
-<p class="small" id="againStatus">Both players must stay connected.</p>
-</div>
-</div>
-</div>
-
-<!-- Celebration overlay (only shown on match win) -->
+<!-- Victory celebration -->
 <div id="celebration" aria-hidden="true">
   <div class="inner">
     <div id="victoryText" class="victory">VICTORY! 🏆</div>
     <div id="victorName" class="victor-name" aria-live="polite"></div>
+
     <div id="emojiBurst" class="emoji-burst hidden">
       <span class="emoji">🥂🍾</span>
       <span class="emoji">🎉</span>
       <span class="emoji">🎊</span>
       <span class="emoji">✨</span>
     </div>
+
     <div id="championText" class="champion hidden">CHAMPION! 🏆🥂</div>
   </div>
 </div>
+
 <div id="confetti"></div>
 
 <script>
@@ -186,7 +221,6 @@ const resultText = $("resultText");
 const againBtn = $("againBtn");
 const againStatus = $("againStatus");
 
-// Celebration elements
 const celebration = $("celebration");
 const victoryText = $("victoryText");
 const victorName = $("victorName");
@@ -205,6 +239,7 @@ let playerNames = ["CYAN", "ORANGE"];
 let gameRunning = false;
 let roomConnected = false;
 let exiting = false;
+let celebrationTimers = [];
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -261,9 +296,7 @@ function connect() {
       roomConnected = false;
       gameRunning = false;
 
-      if (!opened) {
-        reject(new Error("Connection closed before opening"));
-      }
+      if (!opened) reject(new Error("Connection closed before opening"));
 
       if (!exiting) {
         setStatus("Disconnected. Check your connection and try again.");
@@ -376,10 +409,9 @@ function handle(m) {
     showGame();
     updateNames();
     drawGame();
+    hideCelebration();
     showCountdown(m.count || 3);
     setStatus("Get ready!");
-    // Hide celebration at the start of a new round
-    hideCelebration();
     return;
   }
 
@@ -415,6 +447,7 @@ function handle(m) {
     scores = m.scores || scores;
     playerNames = m.playerNames || playerNames;
     gameRunning = false;
+
     updateNames();
     drawGame();
     countdown.classList.add("hidden");
@@ -424,26 +457,43 @@ function handle(m) {
     if (m.headOn || m.winner === null || m.winner === undefined) {
       resultText.textContent = "DRAW! ⚡";
     } else {
-      const winnerName = playerNames[m.winner] ||
+      const roundWinnerName = playerNames[m.winner] ||
         (m.winner === 0 ? "CYAN" : "ORANGE");
-      resultText.textContent = "🏆 " + winnerName.toUpperCase() + " WINS! 🎉";
+
+      resultText.textContent =
+        "🏆 " + roundWinnerName.toUpperCase() + " WINS! 🎉";
     }
 
-    if (m.matchOver) {
+    /*
+      The server must report matchOver only when the match is won.
+      The score check prevents the celebration from appearing
+      before the winning player reaches 5 points.
+    */
+    const winnerIsValid = m.winner === 0 || m.winner === 1;
+    const winnerHasFivePoints = winnerIsValid &&
+      Number(scores[m.winner]) >= 5;
+
+    if (m.matchOver && winnerIsValid && winnerHasFivePoints) {
       resultText.textContent += " 🥇";
-      againStatus.textContent = "Match complete! Play Again starts a new match.";
+      againStatus.textContent =
+        "Match complete! Play Again starts a new match.";
       againBtn.textContent = "NEW MATCH";
       setStatus("Match complete!");
-      // Trigger celebration for match win
-      if (m.winner === 0 || m.winner === 1) {
-        const winnerName = (playerNames[m.winner] || (m.winner === 0 ? "CYAN" : "ORANGE")).toUpperCase();
-        showCelebration(m.winner, winnerName);
-      }
+
+      const winningName = (
+        playerNames[m.winner] ||
+        (m.winner === 0 ? "CYAN" : "ORANGE")
+      ).toUpperCase();
+
+      showCelebration(m.winner, winningName);
     } else {
-      againStatus.textContent = "Round finished. Play Again to continue.";
+      againStatus.textContent =
+        "Round finished. Play Again to continue.";
       againBtn.textContent = "PLAY AGAIN";
       setStatus("Round finished!");
+      hideCelebration();
     }
+
     return;
   }
 
@@ -453,7 +503,8 @@ function handle(m) {
     result.classList.remove("hidden");
     resultText.textContent = "OPPONENT LEFT";
     againBtn.disabled = true;
-    againStatus.textContent = "Exit and create a new room to play again.";
+    againStatus.textContent =
+      "Exit and create a new room to play again.";
     setStatus("Your opponent disconnected.");
     hideCelebration();
   }
@@ -501,8 +552,8 @@ function drawGame() {
 
   players.forEach((p, index) => {
     if (!p) return;
-    const color = index === 0 ? "#2fd8ff" : "#ffa81f";
 
+    const color = index === 0 ? "#2fd8ff" : "#ffa81f";
     ctx.fillStyle = color;
 
     if (Array.isArray(p.trail)) {
@@ -533,7 +584,7 @@ function queueTurn(direction) {
   send({type:"turn", dir:direction});
 }
 
-/* Pointer events support touch and mouse without duplicate moves. */
+/* Touch and mouse controls */
 document.querySelectorAll(".controls button").forEach(button => {
   button.addEventListener("pointerdown", event => {
     event.preventDefault();
@@ -541,6 +592,7 @@ document.querySelectorAll(".controls button").forEach(button => {
   });
 });
 
+/* Keyboard controls */
 document.addEventListener("keydown", event => {
   if (game.classList.contains("hidden") || !gameRunning) return;
 
@@ -555,11 +607,14 @@ document.addEventListener("keydown", event => {
   if (key === "d" || key === "arrowright") queueTurn("R");
 });
 
+/* Copy room code */
 copyBtn.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(room);
     copyBtn.textContent = "✅ COPIED!";
-    setTimeout(() => copyBtn.textContent = "📋 COPY CODE", 1500);
+    setTimeout(() => {
+      copyBtn.textContent = "📋 COPY CODE";
+    }, 1500);
   } catch {
     prompt("Copy this room code:", room);
   }
@@ -570,18 +625,22 @@ joinBtn.addEventListener("click", joinRoom);
 
 roomInput.addEventListener("input", () => {
   roomInput.value = roomInput.value.toUpperCase()
-    .replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 4);
 });
 
+/* Request the next round or new match */
 againBtn.addEventListener("click", () => {
   if (!send({type:"next"})) {
     setStatus("Not connected to the server.");
     return;
   }
+
   againBtn.disabled = true;
   againStatus.textContent = "Waiting for the other player...";
 });
 
+/* Exit game */
 exitBtn.addEventListener("click", () => {
   if (!confirm("Are you sure you want to leave this match?")) return;
 
@@ -612,121 +671,135 @@ exitBtn.addEventListener("click", () => {
   statusEl.textContent = "";
   menuStatus.textContent = "";
   roomStatus.textContent = "Waiting for another player...";
+
   updateNames();
   hideCelebration();
 });
 
-// Celebration logic
-function clearChildren(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+/* Celebration helpers */
+function clearChildren(element) {
+  while (element.firstChild) {
+    element.removeChild(element.firstChild);
+  }
+}
 
-function hideCelebration(){
-  celebration.classList.remove('show');
-  celebration.setAttribute('aria-hidden','true');
-  victoryText.classList.remove('neon-cyan','neon-orange');
-  victorName.textContent = '';
-  emojiBurst.classList.add('hidden');
-  championText.classList.add('hidden');
-  confettiRoot.classList.remove('show');
-  // remove confetti pieces
+function clearCelebrationTimers() {
+  celebrationTimers.forEach(timer => clearTimeout(timer));
+  celebrationTimers = [];
+}
+
+function hideCelebration() {
+  clearCelebrationTimers();
+
+  celebration.classList.remove("show");
+  celebration.setAttribute("aria-hidden", "true");
+
+  victoryText.classList.remove("neon-cyan", "neon-orange");
+  victorName.textContent = "";
+
+  emojiBurst.classList.add("hidden");
+  championText.classList.add("hidden");
+
+  Array.from(emojiBurst.children).forEach(element => {
+    element.style.animation = "";
+  });
+
+  championText.style.animation = "";
+
+  confettiRoot.classList.remove("show");
   clearChildren(confettiRoot);
 }
 
-function createConfettiPieces(count, colorSet){
-  const pieces = [];
-  const w = window.innerWidth;
-  for(let i=0;i<count;i++){
-    const el = document.createElement('div');
-    el.className = 'confetti-piece';
-    const left = Math.random()*100; // vw percentage
-    el.style.left = left + 'vw';
-    el.style.top = (-Math.random()*20) + 'vh';
-    el.style.background = colorSet[Math.floor(Math.random()*colorSet.length)];
-    const delay = Math.random()*0.6;
-    const duration = 2 + Math.random()*2.5;
-    el.style.animation = `confettiFall ${duration}s linear ${delay}s forwards`;
-    el.style.transform = `rotate(${Math.random()*360}deg)`;
-    confettiRoot.appendChild(el);
-    pieces.push(el);
+function createConfettiPieces(count, colorSet) {
+  for (let i = 0; i < count; i++) {
+    const element = document.createElement("div");
+    element.className = "confetti-piece";
+
+    element.style.left = Math.random() * 100 + "vw";
+    element.style.top = -Math.random() * 20 + "vh";
+    element.style.background =
+      colorSet[Math.floor(Math.random() * colorSet.length)];
+
+    const delay = Math.random() * 0.6;
+    const duration = 2 + Math.random() * 2.5;
+
+    element.style.animation =
+      `confettiFall ${duration}s linear ${delay}s forwards`;
+
+    element.style.transform = `rotate(${Math.random() * 360}deg)`;
+
+    confettiRoot.appendChild(element);
   }
-  return pieces;
 }
 
-async function showCelebration(winnerIndex, winnerName){
+function showCelebration(winnerIndex, winnerName) {
   hideCelebration();
-  // choose color class
-  const isCyan = winnerIndex === 0;
-  victoryText.classList.add(isCyan? 'neon-cyan':'neon-orange');
-  celebration.classList.add('show');
-  celebration.setAttribute('aria-hidden','false');
 
-  // prepare name container and animate letters
-  clearChildren(victorName);
-  const name = winnerName || (isCyan? 'CYAN':'ORANGE');
-  // set responsive font size slightly larger on long names
-  // create spans per letter
+  const isCyan = winnerIndex === 0;
+  const neonClass = isCyan ? "neon-cyan" : "neon-orange";
+
+  victoryText.classList.add(neonClass);
+  celebration.classList.add("show");
+  celebration.setAttribute("aria-hidden", "false");
+
+  const name = winnerName || (isCyan ? "CYAN" : "ORANGE");
   const letters = Array.from(name);
-  letters.forEach((ch, i) => {
-    const span = document.createElement('span');
-    span.className = 'letter ' + (isCyan? 'neon-cyan':'neon-orange');
-    span.textContent = ch;
-    // schedule animation via setTimeout
-    setTimeout(()=>{
-      span.style.animation = 'letterIn 420ms cubic-bezier(.2,.9,.3,1) forwards';
-      // add subtle trail using text shadow transition (kept by CSS)
-    }, i * 200); // ~0.2s per letter
+
+  letters.forEach((character, index) => {
+    const span = document.createElement("span");
+    span.className = "letter " + neonClass;
+    span.textContent = character;
+
     victorName.appendChild(span);
+
+    const timer = setTimeout(() => {
+      span.style.animation =
+        "letterIn 420ms cubic-bezier(.2,.9,.3,1) forwards";
+    }, index * 200);
+
+    celebrationTimers.push(timer);
   });
 
-  // show confetti and emojis after name animation completes
   const totalNameTime = letters.length * 200 + 500;
 
-  setTimeout(()=>{
-    // show emoji burst with staggered pop
-    emojiBurst.classList.remove('hidden');
-    Array.from(emojiBurst.children).forEach((el,i)=>{
-      el.style.animation = `emojiPop 650ms cubic-bezier(.2,.8,.2,1) ${i*120}ms both`;
+  const finishTimer = setTimeout(() => {
+    emojiBurst.classList.remove("hidden");
+
+    Array.from(emojiBurst.children).forEach((element, index) => {
+      element.style.animation =
+        `emojiPop 650ms cubic-bezier(.2,.8,.2,1) ${index * 120}ms both`;
     });
 
-    // champion text
-    championText.classList.remove('hidden');
-    championText.style.animation = 'championIn 560ms cubic-bezier(.2,.9,.2,1) 300ms both';
+    championText.classList.remove("hidden");
+    championText.style.animation =
+      "championIn 560ms cubic-bezier(.2,.9,.2,1) 300ms both";
 
-    // add confetti
-    confettiRoot.classList.add('show');
-    const colors = isCyan ? ['#2fd8ff','#9eeeff','#4ac6ff','#fff'] : ['#ffa81f','#ffd58b','#ffc36b','#fff'];
+    confettiRoot.classList.add("show");
+
+    const colors = isCyan
+      ? ["#2fd8ff", "#9eeeff", "#4ac6ff", "#ffffff"]
+      : ["#ffa81f", "#ffd58b", "#ffc36b", "#ffffff"];
+
     createConfettiPieces(28, colors);
 
-    // subtle pulse on victory title
-    victoryText.animate([
-      {transform: 'scale(1)', filter:'brightness(1)'},
-      {transform: 'scale(1.04)', filter:'brightness(1.12)'},
-      {transform: 'scale(1)', filter:'brightness(1)'}
-    ], {duration: 1400, iterations: 2});
-
-    // auto-hide celebration after some time (but keep result visible)
-    setTimeout(()=>{
-      // fade confetti pieces out
-      // keep overlay visible for a bit then allow it to be hidden by next round or exit
-      // leave celebration shown for user until next round
-    }, 3500);
-
+    if (typeof victoryText.animate === "function") {
+      victoryText.animate(
+        [
+          {transform:"scale(1)", filter:"brightness(1)"},
+          {transform:"scale(1.04)", filter:"brightness(1.12)"},
+          {transform:"scale(1)", filter:"brightness(1)"}
+        ],
+        {duration:1400, iterations:2}
+      );
+    }
   }, totalNameTime);
+
+  celebrationTimers.push(finishTimer);
 }
 
-// Utility to ensure celebration is hidden initially
+/* Start with celebration hidden */
 hideCelebration();
-
-// End celebration logic
-
-// rest of game code continues...
-
-function queueTurn(direction) {
-  if (!gameRunning || !ws || ws.readyState !== WebSocket.OPEN) return;
-  send({type:"turn", dir:direction});
-}
-
-// draw initial board
 drawGame();
 </script>
 </body>
-</html>
+  </html>
